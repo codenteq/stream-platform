@@ -1,0 +1,78 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:14-alpine
+    container_name: stream_db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: stream_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: stream_livekit
+    command: --config /etc/livekit.yaml
+    ports:
+      - "7880:7880" # Media port
+      - "7881:7881" # WebRTC port
+      - "7882:7882" # TCP port
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml
+    restart: unless-stopped
+
+  restreamer:
+    image: datarhei/restreamer:latest
+    container_name: stream_restreamer
+    ports:
+      - "8080:8080" # Restreamer UI
+      - "1935:1935" # RTMP port
+    volumes:
+      - restreamer_data:/core/data
+    environment:
+      - RESTREAMER_USERNAME=admin
+      - RESTREAMER_PASSWORD=datarhei
+    restart: unless-stopped
+
+  redis:
+    image: redis:alpine
+    container_name: stream_redis
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: stream_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_SOURCE=postgresql://user:password@db:5432/stream_db?sslmode=disable
+      - LIVEKIT_HOST=http://livekit:7880
+      - LIVEKIT_API_KEY=devkey
+      - LIVEKIT_API_SECRET=secret
+      - JWT_SECRET=my-super-secret-key
+      - RESTREAMER_HOST=http://restreamer:8080
+      - RESTREAMER_USERNAME=admin
+      - RESTREAMER_PASSWORD=datarhei
+    depends_on:
+      - db
+      - livekit
+      - restreamer
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: stream_frontend
+    ports:
+      - "3001:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  restreamer_data:
