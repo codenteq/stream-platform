@@ -244,6 +244,7 @@ function StudioContent({ studioCode }: { studioCode: string }) {
   const [isLive, setIsLive] = useState<boolean>(false);
   const [layout, setLayout] = useState<LayoutMode>('grid');
   const [compositeTrackSid, setCompositeTrackSid] = useState<string | null>(null);
+  const [quality, setQuality] = useState<string>('480p');
   const { localParticipant } = useLocalParticipant();
 
   const handleGoLive = async () => {
@@ -264,7 +265,7 @@ function StudioContent({ studioCode }: { studioCode: string }) {
       const response = await fetchWithAuth(`/api/broadcasts/studio/${studioCode}/start-egress`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trackId: compositeTrackSid, audioTrackId: audioTrackId }),
+        body: JSON.stringify({ trackId: compositeTrackSid, audioTrackId: audioTrackId, quality }),
       });
       if (response.ok) {
         const data = await response.json();
@@ -340,6 +341,19 @@ function StudioContent({ studioCode }: { studioCode: string }) {
         <div className="flex items-center gap-2 p-1 bg-gray-700 rounded-md">
           <Button title="Grid Düzeni" size="sm" variant={layout === 'grid' ? 'default' : 'ghost'} onClick={() => setLayout('grid')}><LayoutGrid className="h-4 w-4" /></Button>
           <Button title="Konuşmacı Düzeni" size="sm" variant={layout === 'speaker' ? 'default' : 'ghost'} onClick={() => setLayout('speaker')}><User className="h-4 w-4" /></Button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <select
+            value={quality}
+            onChange={(e) => setQuality(e.target.value)}
+            className="bg-gray-700 text-white border-none rounded-md p-2 text-sm"
+            disabled={isLive}
+          >
+            <option value="1080p">1080p (FHD)</option>
+            <option value="720p">720p (HD)</option>
+            <option value="480p">480p (SD)</option>
+          </select>
         </div>
 
         {!isLive ? (

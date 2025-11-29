@@ -85,6 +85,7 @@ type LiveKitTokenInput struct {
 type TrackEgressInput struct {
 	TrackID      string `json:"trackId"`
 	AudioTrackID string `json:"audioTrackId"`
+	Quality      string `json:"quality"`
 }
 
 type StreamingTargetInput struct {
@@ -330,6 +331,20 @@ func StartEgress(c *fiber.Ctx) error {
 
 	egressClient := lksdk.NewEgressClient(os.Getenv("LIVEKIT_HOST"), os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET"))
 
+	// Determine encoding options based on quality
+	var width, height, videoBitrate int32
+	switch input.Quality {
+	case "1080p":
+		width, height, videoBitrate = 1920, 1080, 4500
+	case "720p":
+		width, height, videoBitrate = 1280, 720, 3000
+	case "480p":
+		width, height, videoBitrate = 854, 480, 1500
+	default:
+		// Default to 480p for stability
+		width, height, videoBitrate = 854, 480, 1500
+	}
+
 	for _, target := range broadcast.Targets {
 		rtmpUrl := target.RTMPUrl
 
@@ -339,10 +354,10 @@ func StartEgress(c *fiber.Ctx) error {
 			AudioTrackId: input.AudioTrackID,
 			Options: &lk_protocol.TrackCompositeEgressRequest_Advanced{
 				Advanced: &lk_protocol.EncodingOptions{
-					Width:          854,
-					Height:         480,
+					Width:          width,
+					Height:         height,
 					Framerate:      30,
-					VideoBitrate:   1500,
+					VideoBitrate:   videoBitrate,
 					VideoCodec:     lk_protocol.VideoCodec_H264_MAIN,
 					AudioBitrate:   128,
 					AudioCodec:     lk_protocol.AudioCodec_AAC,
