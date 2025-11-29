@@ -3,8 +3,8 @@ log_level: info
 rtc:
   tcp_port: 7882
   port_range_start: 50000
-  port_range_end: 60000
+  port_range_end: 50200
 keys:
-  devkey: secret
+  devkey: ThisIsAStrongAndSecureSecretKey32
 redis:
   address: redis:6379

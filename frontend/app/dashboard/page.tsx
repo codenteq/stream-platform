@@ -152,7 +152,7 @@ export default function DashboardPage() {
               </form>
             </DialogContent>
           </Dialog>
-          <Button variant="outline" asChild><Link href="/dashboard/destinations">Yayın Hedefleri</Link></Button>
+          
           <Button variant="outline" asChild><Link href="/profile">Profil</Link></Button>
           <Button variant="outline" onClick={handleLogout}>Çıkış Yap</Button>
         </div>
@@ -170,6 +170,7 @@ export default function DashboardPage() {
                 <Button asChild><Link href={`/studio/${broadcast.studio_code}`}>Stüdyoya Git</Link></Button>
                 <div className="flex gap-2">
                   <Button variant="secondary" onClick={() => { setEditingBroadcast(broadcast); setEditDialogOpen(true); }}>Düzenle</Button>
+                  <Button variant="outline" asChild><Link href={`/dashboard/broadcasts/${broadcast.id}/destinations`}>Hedefler</Link></Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild><Button variant="destructive">Sil</Button></AlertDialogTrigger>
                     <AlertDialogContent>

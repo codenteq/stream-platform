@@ -22,22 +22,22 @@ services:
       - "7880:7880" # Media port
       - "7881:7881" # WebRTC port
       - "7882:7882" # TCP port
+      - "50000-50200:50000-50200/udp" # WebRTC UDP ports
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml
     restart: unless-stopped
 
-  restreamer:
-    image: datarhei/restreamer:latest
-    container_name: stream_restreamer
-    ports:
-      - "8080:8080" # Restreamer UI
-      - "1935:1935" # RTMP port
+  egress:
+    image: livekit/egress:latest
+    entrypoint: ["egress", "--config", "/etc/egress.yaml"]
     volumes:
-      - restreamer_data:/core/data
-    environment:
-      - RESTREAMER_USERNAME=admin
-      - RESTREAMER_PASSWORD=datarhei
+      - ./egress.yaml:/etc/egress.yaml
+    depends_on:
+      - livekit
+      - redis
     restart: unless-stopped
+
+
 
   redis:
     image: redis:alpine
@@ -53,15 +53,12 @@ services:
       - DB_SOURCE=postgresql://user:password@db:5432/stream_db?sslmode=disable
       - LIVEKIT_HOST=http://livekit:7880
       - LIVEKIT_API_KEY=devkey
-      - LIVEKIT_API_SECRET=secret
+      - LIVEKIT_API_SECRET=ThisIsAStrongAndSecureSecretKey32
       - JWT_SECRET=my-super-secret-key
-      - RESTREAMER_HOST=http://restreamer:8080
-      - RESTREAMER_USERNAME=admin
-      - RESTREAMER_PASSWORD=datarhei
     depends_on:
       - db
       - livekit
-      - restreamer
+    command: sh -c "sleep 10 && /main"
     restart: unless-stopped
 
   frontend:
@@ -75,4 +72,4 @@ services:
 
 volumes:
   postgres_data:
-  restreamer_data:
+

@@ -12,9 +12,7 @@ import Link from 'next/link';
 interface Destination {
     id: string;
     name: string;
-    output: {
-        url: string;
-    };
+    url: string;
 }
 
 export default function DestinationsPage() {
@@ -59,7 +57,8 @@ export default function DestinationsPage() {
                 const errData = await res.json();
                 throw new Error(errData.details || 'Hedef eklenemedi.');
             }
-            await fetchDestinations();
+            // After adding, refetch the entire list to ensure data consistency
+            await fetchDestinations(); 
             setNewDestinationName('');
             setNewDestinationUrl('');
             setCreateOpen(false);
@@ -76,10 +75,11 @@ export default function DestinationsPage() {
                 headers: { 'Authorization': `Bearer ${token}` },
             });
             if (!res.ok) throw new Error('Hedef silinemedi.');
-            setDestinations(destinations.filter(d => d.id !== id));
+            // After deleting, refetch the list to ensure data consistency
+            await fetchDestinations(); 
         } catch (err: any) {
             setError(err.message);
-        }
+        } 
     };
 
     return (
@@ -123,7 +123,7 @@ export default function DestinationsPage() {
                         destinations.map((dest) => (
                             <Card key={dest.id}>
                                 <CardHeader><CardTitle>{dest.name}</CardTitle></CardHeader>
-                                <CardContent><p className="text-sm text-muted-foreground truncate">{dest.output.url}</p></CardContent>
+                                <CardContent><p className="text-sm text-muted-foreground truncate">{dest.url}</p></CardContent>
                                 <CardFooter className="flex justify-end">
                                     <AlertDialog>
                                         <AlertDialogTrigger asChild><Button variant="destructive">Sil</Button></AlertDialogTrigger>

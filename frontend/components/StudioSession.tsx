@@ -29,36 +29,36 @@ import { fetchWithAuth } from '@/lib/utils';
 type LayoutMode = 'grid' | 'speaker';
 
 const calculateLayout = (canvasWidth: number, canvasHeight: number, participantCount: number, layout: LayoutMode) => {
-    const boxes: { x: number, y: number, width: number, height: number }[] = [];
+  const boxes: { x: number, y: number, width: number, height: number }[] = [];
 
-    if (participantCount === 0) return boxes;
+  if (participantCount === 0) return boxes;
 
-    if (layout === 'speaker' && participantCount > 1) {
-        boxes.push({ x: 0, y: 0, width: canvasWidth, height: canvasHeight }); // Main speaker
-        const thumbHeight = canvasHeight / 5;
-        const thumbWidth = thumbHeight * (16/9);
-        const thumbY = canvasHeight - thumbHeight - 20;
+  if (layout === 'speaker' && participantCount > 1) {
+    boxes.push({ x: 0, y: 0, width: canvasWidth, height: canvasHeight }); // Main speaker
+    const thumbHeight = canvasHeight / 5;
+    const thumbWidth = thumbHeight * (16 / 9);
+    const thumbY = canvasHeight - thumbHeight - 20;
 
-        const otherParticipantsCount = participantCount - 1;
-        const totalThumbWidth = otherParticipantsCount * thumbWidth + (otherParticipantsCount - 1) * 10;
-        let startX = (canvasWidth - totalThumbWidth) / 2;
+    const otherParticipantsCount = participantCount - 1;
+    const totalThumbWidth = otherParticipantsCount * thumbWidth + (otherParticipantsCount - 1) * 10;
+    let startX = (canvasWidth - totalThumbWidth) / 2;
 
-        for (let i = 1; i < participantCount; i++) {
-            boxes.push({ x: startX, y: thumbY, width: thumbWidth, height: thumbHeight });
-            startX += thumbWidth + 10;
-        }
-    } else {
-        const rows = Math.round(Math.sqrt(participantCount));
-        const cols = Math.ceil(participantCount / rows);
-        const cellWidth = canvasWidth / cols;
-        const cellHeight = canvasHeight / rows;
-        for (let i = 0; i < participantCount; i++) {
-            const row = Math.floor(i / cols);
-            const col = i % cols;
-            boxes.push({ x: col * cellWidth, y: row * cellHeight, width: cellWidth, height: cellHeight });
-        }
+    for (let i = 1; i < participantCount; i++) {
+      boxes.push({ x: startX, y: thumbY, width: thumbWidth, height: thumbHeight });
+      startX += thumbWidth + 10;
     }
-    return boxes;
+  } else {
+    const rows = Math.round(Math.sqrt(participantCount));
+    const cols = Math.ceil(participantCount / rows);
+    const cellWidth = canvasWidth / cols;
+    const cellHeight = canvasHeight / rows;
+    for (let i = 0; i < participantCount; i++) {
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+      boxes.push({ x: col * cellWidth, y: row * cellHeight, width: cellWidth, height: cellHeight });
+    }
+  }
+  return boxes;
 };
 
 function CustomRoomLayout({ layout, onCompositeTrackPublished }: { layout: LayoutMode, onCompositeTrackPublished: (sid: string | null) => void }) {
@@ -89,15 +89,15 @@ function CustomRoomLayout({ layout, onCompositeTrackPublished }: { layout: Layou
 
     let publication: TrackPublication | undefined;
     localParticipant.publishTrack(track, { name: 'canvas-composite' }).then((pub) => {
-        publication = pub;
-        onCompositeTrackPublished(pub.trackSid);
+      publication = pub;
+      onCompositeTrackPublished(pub.trackSid);
     });
 
     return () => {
-        if (publication) {
-            localParticipant.unpublishTrack(track);
-        }
-        onCompositeTrackPublished(null);
+      if (publication) {
+        localParticipant.unpublishTrack(track);
+      }
+      onCompositeTrackPublished(null);
     }
   }, [localParticipant, onCompositeTrackPublished]);
 
@@ -146,7 +146,7 @@ function CustomRoomLayout({ layout, onCompositeTrackPublished }: { layout: Layou
   };
 
   const setFeatured = (participant: Participant) => {
-      setStageParticipants([participant, ...stageParticipants.filter(p => p.sid !== participant.sid)]);
+    setStageParticipants([participant, ...stageParticipants.filter(p => p.sid !== participant.sid)]);
   }
 
   const backstageParticipants = allParticipants.filter(
@@ -155,26 +155,26 @@ function CustomRoomLayout({ layout, onCompositeTrackPublished }: { layout: Layou
 
   return (
     <div className="flex h-full pt-20">
-        <div style={{ display: 'none' }}>
-            {allParticipants.map(p => {
-                const pub = p.getTrackPublication(Track.Source.Camera);
-                if (!pub?.track) {
-                    return null;
+      <div style={{ display: 'none' }}>
+        {allParticipants.map(p => {
+          const pub = p.getTrackPublication(Track.Source.Camera);
+          if (!pub?.track) {
+            return null;
+          }
+          const trackRef = { participant: p, publication: pub, source: pub.source };
+          return (
+            <VideoTrack
+              key={p.sid}
+              trackRef={trackRef}
+              ref={node => {
+                if (node) {
+                  videoElementsRef.current[p.sid] = node;
                 }
-                const trackRef = { participant: p, publication: pub, source: pub.source };
-                return (
-                    <VideoTrack
-                        key={p.sid}
-                        trackRef={trackRef}
-                        ref={node => {
-                            if (node) {
-                                videoElementsRef.current[p.sid] = node;
-                            }
-                        }}
-                    />
-                );
-            })}
-        </div>
+              }}
+            />
+          );
+        })}
+      </div>
 
       <div className="flex-1 flex items-center justify-center bg-black p-4">
         <canvas ref={canvasRef} width={1280} height={720} className="w-full h-full aspect-video" />
@@ -183,51 +183,51 @@ function CustomRoomLayout({ layout, onCompositeTrackPublished }: { layout: Layou
       <div className="w-64 bg-gray-900 p-4 flex flex-col gap-4 overflow-y-auto">
         <h2 className="text-lg font-semibold text-white">Kulis</h2>
         {backstageParticipants.map(p => {
-            const pub = p.getTrackPublication(Track.Source.Camera);
-            return (
-                <div key={p.sid} className="relative aspect-video bg-gray-800 rounded-lg overflow-hidden">
-                    {pub?.track ? (
-                        <VideoTrack trackRef={{ participant: p, publication: pub, source: pub.source }} />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                            <User className="h-8 w-8 text-gray-400" />
-                        </div>
-                    )}
-                    <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/50 to-transparent">
-                        <p className="text-white text-sm truncate">{p.identity}</p>
-                    </div>
-                    <Button variant="secondary" size="sm" className="absolute top-2 right-2 z-10" onClick={() => addToStage(p)}>
-                      Sahneye Ekle
-                    </Button>
+          const pub = p.getTrackPublication(Track.Source.Camera);
+          return (
+            <div key={p.sid} className="relative aspect-video bg-gray-800 rounded-lg overflow-hidden">
+              {pub?.track ? (
+                <VideoTrack trackRef={{ participant: p, publication: pub, source: pub.source }} />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <User className="h-8 w-8 text-gray-400" />
                 </div>
-            );
+              )}
+              <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/50 to-transparent">
+                <p className="text-white text-sm truncate">{p.identity}</p>
+              </div>
+              <Button variant="secondary" size="sm" className="absolute top-2 right-2 z-10" onClick={() => addToStage(p)}>
+                Sahneye Ekle
+              </Button>
+            </div>
+          );
         })}
         <hr className="border-gray-700" />
         <h2 className="text-lg font-semibold text-white">Sahnede</h2>
-         {stageParticipants.map(p => {
-            const pub = p.getTrackPublication(Track.Source.Camera);
-            return (
-                <div key={p.sid} className="relative aspect-video bg-gray-800 rounded-lg overflow-hidden">
-                    {pub?.track ? (
-                        <VideoTrack trackRef={{ participant: p, publication: pub, source: pub.source }} />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                            <User className="h-12 w-12 text-gray-400" />
-                        </div>
-                    )}
-                    <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/50 to-transparent">
-                        <p className="text-white text-sm truncate">{p.identity}</p>
-                    </div>
-                    <div className="absolute top-2 right-2 z-10 flex gap-1">
-                        {localParticipant && p.sid !== localParticipant.sid && (
-                            <Button variant="destructive" size="sm" className="p-1 h-auto" onClick={() => removeFromStage(p)}>Çıkar</Button>
-                        )}
-                        {layout === 'speaker' && p.sid !== stageParticipants[0]?.sid && (
-                             <Button variant="secondary" size="sm" className="p-1 h-auto" onClick={() => setFeatured(p)}>Öne Çıkar</Button>
-                        )}
-                    </div>
+        {stageParticipants.map(p => {
+          const pub = p.getTrackPublication(Track.Source.Camera);
+          return (
+            <div key={p.sid} className="relative aspect-video bg-gray-800 rounded-lg overflow-hidden">
+              {pub?.track ? (
+                <VideoTrack trackRef={{ participant: p, publication: pub, source: pub.source }} />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <User className="h-12 w-12 text-gray-400" />
                 </div>
-            );
+              )}
+              <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/50 to-transparent">
+                <p className="text-white text-sm truncate">{p.identity}</p>
+              </div>
+              <div className="absolute top-2 right-2 z-10 flex gap-1">
+                {localParticipant && p.sid !== localParticipant.sid && (
+                  <Button variant="destructive" size="sm" className="p-1 h-auto" onClick={() => removeFromStage(p)}>Çıkar</Button>
+                )}
+                {layout === 'speaker' && p.sid !== stageParticipants[0]?.sid && (
+                  <Button variant="secondary" size="sm" className="p-1 h-auto" onClick={() => setFeatured(p)}>Öne Çıkar</Button>
+                )}
+              </div>
+            </div>
+          );
         })}
       </div>
     </div>
@@ -240,21 +240,31 @@ interface StudioSessionProps {
   studioCode: string;
 }
 
-export default function StudioSession({ token, serverUrl, studioCode }: StudioSessionProps) {
+function StudioContent({ studioCode }: { studioCode: string }) {
   const [isLive, setIsLive] = useState<boolean>(false);
   const [layout, setLayout] = useState<LayoutMode>('grid');
   const [compositeTrackSid, setCompositeTrackSid] = useState<string | null>(null);
+  const { localParticipant } = useLocalParticipant();
 
   const handleGoLive = async () => {
     if (!compositeTrackSid) {
       alert('Yayın başlatılamıyor. Kompozit iz bulunamadı.');
       return;
     }
+
+    const audioTrack = localParticipant?.getTrackPublication(Track.Source.Microphone);
+    const audioTrackId = audioTrack?.trackSid;
+
+    if (!audioTrackId) {
+      alert('Yayın başlatılamıyor. Mikrofon izi bulunamadı. Lütfen mikrofonunuzu açın.');
+      return;
+    }
+
     try {
-      const response = await fetchWithAuth(`/api/broadcasts/studio/${studioCode}/start-track-composite-egress`, {
+      const response = await fetchWithAuth(`/api/broadcasts/studio/${studioCode}/start-egress`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trackId: compositeTrackSid }),
+        body: JSON.stringify({ trackId: compositeTrackSid, audioTrackId: audioTrackId }),
       });
       if (response.ok) {
         const data = await response.json();
@@ -265,9 +275,9 @@ export default function StudioSession({ token, serverUrl, studioCode }: StudioSe
         alert(`Yayın başlatılamadı: ${errorData.error || response.statusText}`);
       }
     } catch (error: any) {
-       if (!error.message.includes('Session expired')) {
-            alert(`Bir hata oluştu: ${error.message}`);
-       }
+      if (!error.message.includes('Session expired')) {
+        alert(`Bir hata oluştu: ${error.message}`);
+      }
     }
   };
 
@@ -284,22 +294,14 @@ export default function StudioSession({ token, serverUrl, studioCode }: StudioSe
         alert(`Yayın durdurulamadı: ${errorData.error || response.statusText}`);
       }
     } catch (error: any) {
-       if (!error.message.includes('Session expired')) {
-            alert(`Bir hata oluştu: ${error.message}`);
-       }
+      if (!error.message.includes('Session expired')) {
+        alert(`Bir hata oluştu: ${error.message}`);
+      }
     }
   };
 
   return (
-    <LiveKitRoom
-      token={token}
-      serverUrl={serverUrl}
-      connect={true}
-      video={true}
-      audio={true}
-      data-lk-theme="default"
-      style={{ height: '100vh' }}
-    >
+    <>
       <div className="absolute top-0 left-0 right-0 z-10 flex justify-center items-center gap-4 p-4 bg-gray-800/50">
         <Dialog>
           <DialogTrigger asChild>
@@ -336,8 +338,8 @@ export default function StudioSession({ token, serverUrl, studioCode }: StudioSe
         <TrackToggle source={Track.Source.ScreenShare}>Ekran Paylaş</TrackToggle>
 
         <div className="flex items-center gap-2 p-1 bg-gray-700 rounded-md">
-            <Button title="Grid Düzeni" size="sm" variant={layout === 'grid' ? 'default' : 'ghost'} onClick={() => setLayout('grid')}><LayoutGrid className="h-4 w-4" /></Button>
-            <Button title="Konuşmacı Düzeni" size="sm" variant={layout === 'speaker' ? 'default' : 'ghost'} onClick={() => setLayout('speaker')}><User className="h-4 w-4" /></Button>
+          <Button title="Grid Düzeni" size="sm" variant={layout === 'grid' ? 'default' : 'ghost'} onClick={() => setLayout('grid')}><LayoutGrid className="h-4 w-4" /></Button>
+          <Button title="Konuşmacı Düzeni" size="sm" variant={layout === 'speaker' ? 'default' : 'ghost'} onClick={() => setLayout('speaker')}><User className="h-4 w-4" /></Button>
         </div>
 
         {!isLive ? (
@@ -347,6 +349,28 @@ export default function StudioSession({ token, serverUrl, studioCode }: StudioSe
         )}
       </div>
       <CustomRoomLayout layout={layout} onCompositeTrackPublished={setCompositeTrackSid} />
+    </>
+  );
+}
+
+interface StudioSessionProps {
+  token: string;
+  serverUrl: string;
+  studioCode: string;
+}
+
+export default function StudioSession({ token, serverUrl, studioCode }: StudioSessionProps) {
+  return (
+    <LiveKitRoom
+      token={token}
+      serverUrl={serverUrl}
+      connect={true}
+      video={true}
+      audio={true}
+      data-lk-theme="default"
+      style={{ height: '100vh' }}
+    >
+      <StudioContent studioCode={studioCode} />
     </LiveKitRoom>
   );
 }
