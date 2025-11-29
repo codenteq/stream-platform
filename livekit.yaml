@@ -4,6 +4,7 @@ rtc:
   tcp_port: 7882
   port_range_start: 50000
   port_range_end: 50200
+  node_ip: "127.0.0.1"
 keys:
   devkey: ThisIsAStrongAndSecureSecretKey32
 redis:

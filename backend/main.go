@@ -170,6 +170,18 @@ func GetBroadcasts(c *fiber.Ctx) error {
 	return c.JSON(broadcasts)
 }
 
+func GetBroadcastByStudioCode(c *fiber.Ctx) error {
+	userId := getUserIdFromToken(c)
+	studioCode := c.Params("studioCode")
+
+	var broadcast Broadcast
+	if result := DB.Preload("Targets").First(&broadcast, "studio_code = ? AND user_id = ?", studioCode, userId); result.Error != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Broadcast not found"})
+	}
+
+	return c.JSON(broadcast)
+}
+
 func CreateBroadcast(c *fiber.Ctx) error {
 	userId := getUserIdFromToken(c)
 	input := new(BroadcastInput)
@@ -430,11 +442,58 @@ func CreateLiveKitToken(c *fiber.Ctx) error {
 	participantIdentity := claims["email"].(string)
 
 	at := auth.NewAccessToken(os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET"))
+	canPub := true
+	canSub := true
 	grant := &auth.VideoGrant{
-		RoomJoin: true,
-		Room:     input.Room,
+		RoomJoin:     true,
+		Room:         input.Room,
+		CanPublish:   &canPub,
+		CanSubscribe: &canSub,
 	}
-	at.AddGrant(grant).SetIdentity(participantIdentity).SetValidFor(time.Hour)
+	// Set role as host in metadata for authenticated users
+	metadata := `{"role":"host"}`
+
+	at.AddGrant(grant).
+		SetIdentity(participantIdentity).
+		SetMetadata(metadata).
+		SetValidFor(time.Hour)
+
+	token, err := at.ToJWT()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create LiveKit token"})
+	}
+
+	return c.JSON(fiber.Map{"token": token})
+}
+
+type JoinStudioInput struct {
+	StudioCode string `json:"studioCode"`
+	Name       string `json:"name"`
+}
+
+func JoinStudioPublic(c *fiber.Ctx) error {
+	input := new(JoinStudioInput)
+	if err := c.BodyParser(input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
+	}
+
+	at := auth.NewAccessToken(os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET"))
+	canPub := true
+	canSub := true
+	grant := &auth.VideoGrant{
+		RoomJoin:     true,
+		Room:         input.StudioCode,
+		CanPublish:   &canPub,
+		CanSubscribe: &canSub,
+	}
+	// Set role as guest in metadata
+	metadata := `{"role":"guest"}`
+
+	at.AddGrant(grant).
+		SetIdentity(input.Name).
+		SetName(input.Name).
+		SetMetadata(metadata).
+		SetValidFor(time.Hour)
 
 	token, err := at.ToJWT()
 	if err != nil {
@@ -457,6 +516,7 @@ func main() {
 	api := app.Group("/api")
 	api.Post("/register", Register)
 	api.Post("/login", Login)
+	api.Post("/public/join-studio", JoinStudioPublic)
 
 	// Protected routes
 	protected := api.Group("/", jwtware.New(jwtware.Config{
@@ -467,6 +527,7 @@ func main() {
 
 	// Broadcasts
 	protected.Get("/broadcasts", GetBroadcasts)
+	protected.Get("/broadcasts/studio/:studioCode", GetBroadcastByStudioCode)
 	protected.Post("/broadcasts", CreateBroadcast)
 	protected.Put("/broadcasts/:id", UpdateBroadcast)
 	protected.Delete("/broadcasts/:id", DeleteBroadcast)
