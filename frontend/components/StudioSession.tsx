@@ -27,7 +27,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { LayoutGrid, User } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { LayoutGrid, User, Palette } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/utils';
 
 type LayoutMode = 'grid' | 'speaker';
@@ -65,13 +66,19 @@ const calculateLayout = (canvasWidth: number, canvasHeight: number, participantC
   return boxes;
 };
 
+interface StageTrack {
+  participant: Participant;
+  source: Track.Source;
+}
+
 interface ParticipantTileProps {
   participant: Participant;
+  source: Track.Source;
   isHost: boolean;
   variant: 'backstage' | 'stage';
-  onAddToStage?: (p: Participant) => void;
-  onRemoveFromStage?: (p: Participant) => void;
-  onSetFeatured?: (p: Participant) => void;
+  onAddToStage?: (track: StageTrack) => void;
+  onRemoveFromStage?: (track: StageTrack) => void;
+  onSetFeatured?: (track: StageTrack) => void;
   layout?: LayoutMode;
   localParticipant?: Participant;
   isFeatured?: boolean;
@@ -79,6 +86,7 @@ interface ParticipantTileProps {
 
 function ParticipantTile({
   participant,
+  source,
   isHost,
   variant,
   onAddToStage,
@@ -88,7 +96,7 @@ function ParticipantTile({
   localParticipant,
   isFeatured
 }: ParticipantTileProps) {
-  const pub = participant.getTrackPublication(Track.Source.Camera);
+  const pub = participant.getTrackPublication(source);
   const isSpeaking = useIsSpeaking(participant);
 
   return (
@@ -97,26 +105,35 @@ function ParticipantTile({
         <VideoTrack trackRef={{ participant: participant, publication: pub, source: pub.source }} />
       ) : (
         <div className="w-full h-full flex items-center justify-center">
-          <User className={`text-gray-400 ${variant === 'stage' ? 'h-12 w-12' : 'h-8 w-8'}`} />
+          {source === Track.Source.ScreenShare ? (
+            <div className="text-gray-400 flex flex-col items-center">
+              <LayoutGrid className="h-8 w-8 mb-2" />
+              <span className="text-xs">Ekran Paylaşımı</span>
+            </div>
+          ) : (
+            <User className={`text-gray-400 ${variant === 'stage' ? 'h-12 w-12' : 'h-8 w-8'}`} />
+          )}
         </div>
       )}
       <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/50 to-transparent">
-        <p className="text-white text-sm truncate">{participant.identity}</p>
+        <p className="text-white text-sm truncate">
+          {participant.identity} {source === Track.Source.ScreenShare ? '(Ekran)' : ''}
+        </p>
       </div>
 
       {isHost && variant === 'backstage' && onAddToStage && (
-        <Button variant="secondary" size="sm" className="absolute top-2 right-2 z-10" onClick={() => onAddToStage(participant)}>
+        <Button variant="secondary" size="sm" className="absolute top-2 right-2 z-10" onClick={() => onAddToStage({ participant, source })}>
           Sahneye Ekle
         </Button>
       )}
 
       {isHost && variant === 'stage' && (
         <div className="absolute top-2 right-2 z-10 flex gap-1">
-          {localParticipant && participant.sid !== localParticipant.sid && onRemoveFromStage && (
-            <Button variant="destructive" size="sm" className="p-1 h-auto" onClick={() => onRemoveFromStage(participant)}>Çıkar</Button>
+          {onRemoveFromStage && (
+            <Button variant="destructive" size="sm" className="p-1 h-auto" onClick={() => onRemoveFromStage({ participant, source })}>Çıkar</Button>
           )}
           {layout === 'speaker' && !isFeatured && onSetFeatured && (
-            <Button variant="secondary" size="sm" className="p-1 h-auto" onClick={() => onSetFeatured(participant)}>Öne Çıkar</Button>
+            <Button variant="secondary" size="sm" className="p-1 h-auto" onClick={() => onSetFeatured({ participant, source })}>Öne Çıkar</Button>
           )}
         </div>
       )}
@@ -124,55 +141,105 @@ function ParticipantTile({
   );
 }
 
-function CustomRoomLayout({ layout, onCompositeTrackPublished, setLayout, isHost }: { layout: LayoutMode, onCompositeTrackPublished: (sid: string | null) => void, setLayout: (layout: LayoutMode) => void, isHost: boolean }) {
+interface CustomRoomLayoutProps {
+  layout: LayoutMode;
+  onCompositeTrackPublished: (sid: string | null) => void;
+  setLayout: (layout: LayoutMode) => void;
+  isHost: boolean;
+  logoUrl: string;
+  showLogo: boolean;
+  overlayUrl: string;
+  showOverlay: boolean;
+}
+
+function CustomRoomLayout({
+  layout,
+  onCompositeTrackPublished,
+  setLayout,
+  isHost,
+  logoUrl,
+  showLogo,
+  overlayUrl,
+  showOverlay
+}: CustomRoomLayoutProps) {
   const { localParticipant } = useLocalParticipant();
   const remoteParticipants = useParticipants();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoElementsRef = useRef<Record<string, HTMLVideoElement>>({});
-  const [stageParticipants, setStageParticipants] = useState<Participant[]>([]);
+  const [stageParticipants, setStageParticipants] = useState<StageTrack[]>([]);
   const room = useRoomContext();
 
+  // Image refs
+  const logoImageRef = useRef<HTMLImageElement | null>(null);
+  const overlayImageRef = useRef<HTMLImageElement | null>(null);
+
+  // Load images when URLs change
+  useEffect(() => {
+    if (logoUrl) {
+      const img = new Image();
+      img.crossOrigin = 'Anonymous';
+      img.src = logoUrl;
+      img.onload = () => { logoImageRef.current = img; };
+    } else {
+      logoImageRef.current = null;
+    }
+  }, [logoUrl]);
+
+  useEffect(() => {
+    if (overlayUrl) {
+      const img = new Image();
+      img.crossOrigin = 'Anonymous';
+      img.src = overlayUrl;
+      img.onload = () => { overlayImageRef.current = img; };
+    } else {
+      overlayImageRef.current = null;
+    }
+  }, [overlayUrl]);
+
+
   // Helper to broadcast state changes
-  const broadcastState = useCallback(async (newStageParticipants: Participant[], newLayout: LayoutMode) => {
-    if (!localParticipant || !isHost) return; // Only host can broadcast
+  const broadcastState = useCallback(async (newStageTracks: StageTrack[], newLayout: LayoutMode) => {
+    if (!localParticipant || !isHost) return;
 
     const state = {
       type: 'SCENE_UPDATE',
-      stageParticipantSids: newStageParticipants.map(p => p.sid),
+      stageTracks: newStageTracks.map(t => ({ sid: t.participant.sid, source: t.source })),
       layout: newLayout
     };
 
     try {
-      console.log('Broadcasting state:', state);
       const data = new TextEncoder().encode(JSON.stringify(state));
       await localParticipant.publishData(data, { reliable: true });
-      console.log('State broadcasted successfully');
     } catch (error) {
       console.error('Failed to broadcast state:', error);
     }
   }, [localParticipant, isHost]);
 
-  // Add local participant to stage when they connect and stage is empty (Initial local only)
+  // Add local participant camera to stage initially
   useEffect(() => {
     if (localParticipant && stageParticipants.length === 0 && isHost) {
-      const newStage = [localParticipant];
+      const newStage = [{ participant: localParticipant, source: Track.Source.Camera }];
       setStageParticipants(newStage);
-      // We don't broadcast here immediately to avoid storm, 
-      // but if we are the first/host, we might want to.
-      // For now, let's rely on explicit actions or the "sync on join" logic.
     }
-  }, [localParticipant, isHost]); // Removed stageParticipants dependency to avoid loop, but need to be careful.
+  }, [localParticipant, isHost]);
 
-  const allParticipants = [localParticipant, ...remoteParticipants].filter(p => p);
+  // Deduplicate participants to avoid UI glitches
+  const allParticipants = Array.from(
+    new Map(
+      [localParticipant, ...remoteParticipants]
+        .filter((p) => !!p)
+        .map(p => [p.sid, p])
+    ).values()
+  );
 
   // Publish canvas stream
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !localParticipant) return;
 
-    const stream = canvas.captureStream(25);
+    const stream = canvas.captureStream(30);
     const videoTrack = stream.getVideoTracks()[0];
-    if (!videoTrack) return; // Add a guard
+    if (!videoTrack) return;
     const track = new LocalVideoTrack(videoTrack);
 
     let publication: TrackPublication | undefined;
@@ -203,16 +270,34 @@ function CustomRoomLayout({ layout, onCompositeTrackPublished, setLayout, isHost
       ctx.fillStyle = 'black';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const participantsToDraw = stageParticipants.filter(p => videoElementsRef.current[p.sid]);
-      const layoutBoxes = calculateLayout(canvas.width, canvas.height, participantsToDraw.length, layout);
+      // Filter tracks that have a video element
+      const tracksToDraw = stageParticipants.filter(t => {
+        const key = `${t.participant.sid}_${t.source}`;
+        return videoElementsRef.current[key];
+      });
 
-      participantsToDraw.forEach((p, index) => {
-        const video = videoElementsRef.current[p.sid];
+      const layoutBoxes = calculateLayout(canvas.width, canvas.height, tracksToDraw.length, layout);
+
+      tracksToDraw.forEach((t, index) => {
+        const key = `${t.participant.sid}_${t.source}`;
+        const video = videoElementsRef.current[key];
         const box = layoutBoxes[index];
         if (video && box && video.readyState >= HTMLMediaElement.HAVE_METADATA) {
           ctx.drawImage(video, box.x, box.y, box.width, box.height);
         }
       });
+
+      // Draw Logo (Top Right)
+      if (showLogo && logoImageRef.current) {
+        const logoSize = 100;
+        const padding = 20;
+        ctx.drawImage(logoImageRef.current, canvas.width - logoSize - padding, padding, logoSize, logoSize);
+      }
+
+      // Draw Overlay (Full Screen)
+      if (showOverlay && overlayImageRef.current) {
+        ctx.drawImage(overlayImageRef.current, 0, 0, canvas.width, canvas.height);
+      }
 
       animationFrameId = requestAnimationFrame(draw);
     };
@@ -222,7 +307,7 @@ function CustomRoomLayout({ layout, onCompositeTrackPublished, setLayout, isHost
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [stageParticipants, layout]);
+  }, [stageParticipants, layout, showLogo, showOverlay]);
 
   // --- SYNC LOGIC ---
 
@@ -233,24 +318,18 @@ function CustomRoomLayout({ layout, onCompositeTrackPublished, setLayout, isHost
     const handleData = (payload: Uint8Array, participant?: Participant) => {
       try {
         const str = new TextDecoder().decode(payload);
-        console.log('Data received:', str, 'from', participant?.identity);
         const data = JSON.parse(str);
 
         if (data.type === 'SCENE_UPDATE') {
-          // Resolve SIDs to Participant objects using the Room instance directly
-          // to avoid stale closures from React state
           const local = room.localParticipant;
           const remotes = Array.from(room.remoteParticipants.values());
           const potentialParticipants = [local, ...remotes];
 
-          console.log('Resolving SIDs:', data.stageParticipantSids);
-          console.log('Potential Participants (Live):', potentialParticipants.map(p => p?.sid));
+          const newStage = data.stageTracks.map((t: any) => {
+            const p = potentialParticipants.find((pp: any) => pp?.sid === t.sid);
+            return p ? { participant: p, source: t.source } : undefined;
+          }).filter((t: any) => t !== undefined) as StageTrack[];
 
-          const newStage = data.stageParticipantSids.map((sid: string) =>
-            potentialParticipants.find((p: any) => p?.sid === sid)
-          ).filter((p: any) => p !== undefined) as Participant[];
-
-          console.log('Resolved New Stage:', newStage.map(p => p.sid));
           setStageParticipants(newStage);
           setLayout(data.layout);
         }
@@ -265,80 +344,85 @@ function CustomRoomLayout({ layout, onCompositeTrackPublished, setLayout, isHost
     };
   }, [room, setLayout]);
 
-  // Sync new participants (Send them current state)
+  // Sync new participants
   useEffect(() => {
-    if (!room || !isHost) return; // Only host syncs new participants
+    if (!room || !isHost) return;
 
     const handleParticipantConnected = () => {
-      // If I have state, send it to the new guy.
-      // Ideally only the HOST does this, but for now anyone with state can.
-      // To avoid flood, maybe check if I am the "oldest" or just let it be for now (LiveKit handles data messages well).
-      // Better: Only send if I am the one who last changed it? 
-      // Simplest: Just send it.
       broadcastState(stageParticipants, layout);
     };
 
     room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
 
-    const handleTrackSubscribed = (track: any, publication: any, participant: any) => {
-      console.log('Track subscribed:', track.kind, track.sid, 'from', participant.identity);
-    };
-    room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
-
     return () => {
       room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
-      room.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
     };
   }, [room, stageParticipants, layout, broadcastState, isHost]);
 
 
   // Actions
-  const addToStage = (participant: Participant) => {
+  const addToStage = (track: StageTrack) => {
     if (!isHost) return;
-    if (stageParticipants.find(p => p.sid === participant.sid)) return;
-    const newStage = [...stageParticipants, participant];
+    if (stageParticipants.find(t => t.participant.sid === track.participant.sid && t.source === track.source)) return;
+    const newStage = [...stageParticipants, track];
     setStageParticipants(newStage);
     broadcastState(newStage, layout);
   };
 
-  const removeFromStage = (participant: Participant) => {
+  const removeFromStage = (track: StageTrack) => {
     if (!isHost) return;
-    const newStage = stageParticipants.filter(p => p.sid !== participant.sid);
+    const newStage = stageParticipants.filter(t => !(t.participant.sid === track.participant.sid && t.source === track.source));
     setStageParticipants(newStage);
     broadcastState(newStage, layout);
   };
 
-  const setFeatured = (participant: Participant) => {
+  const setFeatured = (track: StageTrack) => {
     if (!isHost) return;
-    const newStage = [participant, ...stageParticipants.filter(p => p.sid !== participant.sid)];
+    const newStage = [track, ...stageParticipants.filter(t => !(t.participant.sid === track.participant.sid && t.source === track.source))];
     setStageParticipants(newStage);
     broadcastState(newStage, layout);
   };
 
-  const backstageParticipants = allParticipants.filter(
-    p => !stageParticipants.find(sp => sp.sid === p.sid)
-  );
+  // Derive backstage tracks
+  // A track is in backstage if it exists (published) AND is NOT on stage
+  const backstageTracks: StageTrack[] = [];
+  allParticipants.forEach(p => {
+    // Check Camera
+    if (p.getTrackPublication(Track.Source.Camera)) {
+      if (!stageParticipants.find(t => t.participant.sid === p.sid && t.source === Track.Source.Camera)) {
+        backstageTracks.push({ participant: p, source: Track.Source.Camera });
+      }
+    }
+    // Check ScreenShare
+    if (p.getTrackPublication(Track.Source.ScreenShare)) {
+      if (!stageParticipants.find(t => t.participant.sid === p.sid && t.source === Track.Source.ScreenShare)) {
+        backstageTracks.push({ participant: p, source: Track.Source.ScreenShare });
+      }
+    }
+  });
 
   return (
     <div className="flex h-full pt-20">
       <div style={{ display: 'none' }}>
         {allParticipants.map(p => {
-          const pub = p.getTrackPublication(Track.Source.Camera);
-          if (!pub?.track) {
-            return null;
-          }
-          const trackRef = { participant: p, publication: pub, source: pub.source };
-          return (
-            <VideoTrack
-              key={p.sid}
-              trackRef={trackRef}
-              ref={node => {
-                if (node) {
-                  videoElementsRef.current[p.sid] = node;
-                }
-              }}
-            />
-          );
+          // Render both Camera and ScreenShare video tracks to be used by canvas
+          const tracks = [Track.Source.Camera, Track.Source.ScreenShare];
+          return tracks.map(source => {
+            const pub = p.getTrackPublication(source);
+            if (!pub?.track) return null;
+            const trackRef = { participant: p, publication: pub, source: source };
+            return (
+              <VideoTrack
+                key={`${p.sid}_${source}`}
+                trackRef={trackRef}
+                ref={node => {
+                  if (node) {
+                    videoElementsRef.current[`${p.sid}_${source}`] = node;
+                  }
+                }}
+              />
+            );
+          });
         })}
       </div>
 
@@ -348,10 +432,11 @@ function CustomRoomLayout({ layout, onCompositeTrackPublished, setLayout, isHost
 
       <div className="w-64 bg-gray-900 p-4 flex flex-col gap-4 overflow-y-auto">
         <h2 className="text-lg font-semibold text-white">Kulis</h2>
-        {backstageParticipants.map(p => (
+        {backstageTracks.map(t => (
           <ParticipantTile
-            key={p.sid}
-            participant={p}
+            key={`${t.participant.sid}_${t.source}`}
+            participant={t.participant}
+            source={t.source}
             isHost={isHost}
             variant="backstage"
             onAddToStage={addToStage}
@@ -359,10 +444,11 @@ function CustomRoomLayout({ layout, onCompositeTrackPublished, setLayout, isHost
         ))}
         <hr className="border-gray-700" />
         <h2 className="text-lg font-semibold text-white">Sahnede</h2>
-        {stageParticipants.map((p, index) => (
+        {stageParticipants.map((t, index) => (
           <ParticipantTile
-            key={p.sid}
-            participant={p}
+            key={`${t.participant.sid}_${t.source}`}
+            participant={t.participant}
+            source={t.source}
             isHost={isHost}
             variant="stage"
             onRemoveFromStage={removeFromStage}
@@ -375,12 +461,6 @@ function CustomRoomLayout({ layout, onCompositeTrackPublished, setLayout, isHost
       </div>
     </div>
   );
-}
-
-interface StudioSessionProps {
-  token: string;
-  serverUrl: string;
-  studioCode: string;
 }
 
 interface StreamingTarget {
@@ -441,18 +521,20 @@ function StreamDestinations({ broadcastId, targets, onTargetsChange }: { broadca
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">Yayın Hedefleri ({targets.length})</Button>
+        <Button variant="ghost" size="sm" className="bg-gray-800 text-white hover:bg-gray-700 border border-gray-700">
+          Yayın Hedefleri ({targets.length})
+        </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="bg-gray-900 border-gray-800 text-white">
         <DialogHeader>
           <DialogTitle>Yayın Hedefleri</DialogTitle>
-          <DialogDescription>Yayınınızın gönderileceği platformları yönetin.</DialogDescription>
+          <DialogDescription className="text-gray-400">Yayınınızın gönderileceği platformları yönetin.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
             {targets.map(target => (
-              <div key={target.id} className="flex items-center justify-between p-2 bg-gray-800 rounded">
+              <div key={target.id} className="flex items-center justify-between p-2 bg-gray-800 rounded border border-gray-700">
                 <div>
                   <p className="font-bold text-white">{target.platform}</p>
                   <p className="text-xs text-gray-400 truncate w-48">{target.rtmp_url}</p>
@@ -468,20 +550,124 @@ function StreamDestinations({ broadcastId, targets, onTargetsChange }: { broadca
             <select
               value={platform}
               onChange={e => setPlatform(e.target.value)}
-              className="w-full p-2 bg-gray-700 text-white rounded"
+              className="w-full p-2 bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="YouTube">YouTube</option>
               <option value="Twitch">Twitch</option>
               <option value="Facebook">Facebook</option>
               <option value="Custom">Custom RTMP</option>
             </select>
-            <Input placeholder="RTMP URL" value={rtmpUrl} onChange={e => setRtmpUrl(e.target.value)} />
-            <Input type="password" placeholder="Stream Key" value={streamKey} onChange={e => setStreamKey(e.target.value)} />
-            <Button className="w-full" onClick={handleAddTarget} disabled={isLoading}>
+            <Input placeholder="RTMP URL" value={rtmpUrl} onChange={e => setRtmpUrl(e.target.value)} className="bg-gray-800 border-gray-700 text-white" />
+            <Input type="password" placeholder="Stream Key" value={streamKey} onChange={e => setStreamKey(e.target.value)} className="bg-gray-800 border-gray-700 text-white" />
+            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={handleAddTarget} disabled={isLoading}>
               {isLoading ? 'Ekleniyor...' : 'Ekle'}
             </Button>
           </div>
         </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface BrandSettingsProps {
+  broadcastId: number;
+  title: string;
+  logoUrl: string;
+  showLogo: boolean;
+  overlayUrl: string;
+  showOverlay: boolean;
+  onUpdate: () => void;
+}
+
+function BrandSettings({ broadcastId, title, logoUrl, showLogo, overlayUrl, showOverlay, onUpdate }: BrandSettingsProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [localTitle, setLocalTitle] = useState(title);
+  const [localLogoUrl, setLocalLogoUrl] = useState(logoUrl);
+  const [localShowLogo, setLocalShowLogo] = useState(showLogo);
+  const [localOverlayUrl, setLocalOverlayUrl] = useState(overlayUrl);
+  const [localShowOverlay, setLocalShowOverlay] = useState(showOverlay);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setLocalTitle(title);
+      setLocalLogoUrl(logoUrl);
+      setLocalShowLogo(showLogo);
+      setLocalOverlayUrl(overlayUrl);
+      setLocalShowOverlay(showOverlay);
+    }
+  }, [isOpen, title, logoUrl, showLogo, overlayUrl, showOverlay]);
+
+  const handleSave = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetchWithAuth(`/api/broadcasts/${broadcastId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: localTitle,
+          logo_url: localLogoUrl,
+          show_logo: localShowLogo,
+          overlay_url: localOverlayUrl,
+          show_overlay: localShowOverlay
+        }),
+      });
+
+      if (response.ok) {
+        onUpdate();
+        setIsOpen(false);
+      } else {
+        alert('Ayarlar kaydedilemedi.');
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Bir hata oluştu.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" title="Marka Ayarları" className="bg-gray-800 text-white hover:bg-gray-700 border border-gray-700 px-2">
+          <Palette className="h-5 w-5" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="bg-gray-900 border-gray-800 text-white">
+        <DialogHeader>
+          <DialogTitle>Marka ve Görünüm</DialogTitle>
+          <DialogDescription className="text-gray-400">Yayınınızın başlığını, logosunu ve arayüzünü özelleştirin.</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label className="text-gray-300">Yayın Başlığı</Label>
+            <Input value={localTitle} onChange={e => setLocalTitle(e.target.value)} className="bg-gray-800 border-gray-700 text-white" />
+          </div>
+
+          <div className="space-y-2 border-t border-gray-700 pt-4">
+            <div className="flex items-center justify-between">
+              <Label className="text-gray-300">Logo</Label>
+              <Switch checked={localShowLogo} onCheckedChange={setLocalShowLogo} />
+            </div>
+            <Input placeholder="Logo URL (PNG/JPG)" value={localLogoUrl} onChange={e => setLocalLogoUrl(e.target.value)} className="bg-gray-800 border-gray-700 text-white" />
+            <p className="text-xs text-gray-400">Önerilen: 200x200px şeffaf PNG. Sağ üst köşede görünür.</p>
+          </div>
+
+          <div className="space-y-2 border-t border-gray-700 pt-4">
+            <div className="flex items-center justify-between">
+              <Label className="text-gray-300">Overlay (Arayüz)</Label>
+              <Switch checked={localShowOverlay} onCheckedChange={setLocalShowOverlay} />
+            </div>
+            <Input placeholder="Overlay URL (PNG)" value={localOverlayUrl} onChange={e => setLocalOverlayUrl(e.target.value)} className="bg-gray-800 border-gray-700 text-white" />
+            <p className="text-xs text-gray-400">Önerilen: 1280x720px şeffaf PNG. Tüm ekranı kaplar.</p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button onClick={handleSave} disabled={isLoading} variant="secondary">{isLoading ? 'Kaydediliyor...' : 'Kaydet'}</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -502,7 +688,14 @@ function StudioContent({ studioCode, initialRole = 'guest' }: { studioCode: stri
 
   // Broadcast Management
   const [broadcastId, setBroadcastId] = useState<number | null>(null);
+  const [broadcastTitle, setBroadcastTitle] = useState('');
   const [targets, setTargets] = useState<StreamingTarget[]>([]);
+
+  // Brand State
+  const [logoUrl, setLogoUrl] = useState('');
+  const [showLogo, setShowLogo] = useState(false);
+  const [overlayUrl, setOverlayUrl] = useState('');
+  const [showOverlay, setShowOverlay] = useState(false);
 
   useEffect(() => {
     setRole(initialRole);
@@ -533,7 +726,13 @@ function StudioContent({ studioCode, initialRole = 'guest' }: { studioCode: stri
       if (response.ok) {
         const data = await response.json();
         setBroadcastId(data.id);
+        setBroadcastTitle(data.title);
         setTargets(data.targets || []);
+        // Brand details
+        setLogoUrl(data.logo_url || '');
+        setShowLogo(data.show_logo || false);
+        setOverlayUrl(data.overlay_url || '');
+        setShowOverlay(data.show_overlay || false);
       }
     } catch (error) {
       console.error('Failed to fetch broadcast details:', error);
@@ -606,78 +805,115 @@ function StudioContent({ studioCode, initialRole = 'guest' }: { studioCode: stri
 
   return (
     <>
-      <div className="absolute top-0 left-0 right-0 z-10 flex justify-center items-center gap-4 p-4 bg-gray-800/50">
+      <div className="absolute top-0 left-0 right-0 z-10 flex justify-center items-center gap-4 p-4 bg-gray-900/90 border-b border-gray-800 backdrop-blur-sm">
         <Dialog>
           <DialogTrigger asChild>
-            <Button variant="outline">Katılımcı Davet Et</Button>
+            <Button variant="secondary" size="sm" className="bg-gray-800 text-white hover:bg-gray-700">
+              <User className="mr-2 h-4 w-4" />
+              Davet Et
+            </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="bg-gray-900 border-gray-800 text-white">
             <DialogHeader>
               <DialogTitle>Katılımcı Davet Et</DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-gray-400">
                 Aşağıdaki linki kopyalayarak katılımcıları stüdyonuzda davet edebilirsiniz.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="invite-link" className="text-right">
+                <Label htmlFor="invite-link" className="text-right text-gray-300">
                   Davet Linki
                 </Label>
                 <Input
                   id="invite-link"
                   defaultValue={`http://localhost:3001/studio/${studioCode}`}
                   readOnly
-                  className="col-span-3"
+                  className="col-span-3 bg-gray-800 border-gray-700 text-white"
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" onClick={() => navigator.clipboard.writeText(`http://localhost:3001/studio/${studioCode}`)}>Kopyala</Button>
+              <Button type="button" onClick={() => navigator.clipboard.writeText(`http://localhost:3001/studio/${studioCode}`)} variant="secondary">
+                Kopyala
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        <TrackToggle source={Track.Source.Camera}>Kamera</TrackToggle>
-        <TrackToggle source={Track.Source.Microphone}>Mikrofon</TrackToggle>
-        <TrackToggle source={Track.Source.ScreenShare}>Ekran Paylaş</TrackToggle>
+        <div className="h-6 w-px bg-gray-700 mx-2" />
+
+        <TrackToggle source={Track.Source.Camera} className="bg-gray-800 text-white hover:bg-gray-700 data-[state=on]:bg-green-600">Kamera</TrackToggle>
+        <TrackToggle source={Track.Source.Microphone} className="bg-gray-800 text-white hover:bg-gray-700 data-[state=on]:bg-green-600">Mikrofon</TrackToggle>
+        <TrackToggle source={Track.Source.ScreenShare} className="bg-gray-800 text-white hover:bg-gray-700 data-[state=on]:bg-green-600">Ekran</TrackToggle>
 
         {isHost && (
           <>
-            <div className="flex items-center gap-2 p-1 bg-gray-700 rounded-md">
-              <Button title="Grid Düzeni" size="sm" variant={layout === 'grid' ? 'default' : 'ghost'} onClick={() => setLayout('grid')}><LayoutGrid className="h-4 w-4" /></Button>
-              <Button title="Konuşmacı Düzeni" size="sm" variant={layout === 'speaker' ? 'default' : 'ghost'} onClick={() => setLayout('speaker')}><User className="h-4 w-4" /></Button>
+            <div className="h-6 w-px bg-gray-700 mx-2" />
+
+            <div className="flex items-center gap-1 p-1 bg-gray-800 rounded-lg border border-gray-700">
+              <Button title="Grid Düzeni" size="icon" variant={layout === 'grid' ? 'secondary' : 'ghost'} onClick={() => setLayout('grid')} className="h-8 w-8">
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button title="Konuşmacı Düzeni" size="icon" variant={layout === 'speaker' ? 'secondary' : 'ghost'} onClick={() => setLayout('speaker')} className="h-8 w-8">
+                <User className="h-4 w-4" />
+              </Button>
             </div>
 
-            <div className="flex items-center gap-2">
-              <select
-                value={quality}
-                onChange={(e) => setQuality(e.target.value)}
-                className="bg-gray-700 text-white border-none rounded-md p-2 text-sm"
-                disabled={isLive}
-              >
-                <option value="1080p">1080p (FHD)</option>
-                <option value="720p">720p (HD)</option>
-                <option value="480p">480p (SD)</option>
-              </select>
-            </div>
+            <select
+              value={quality}
+              onChange={(e) => setQuality(e.target.value)}
+              className="bg-gray-800 text-white border border-gray-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isLive}
+            >
+              <option value="1080p">1080p (FHD)</option>
+              <option value="720p">720p (HD)</option>
+              <option value="480p">480p (SD)</option>
+            </select>
 
             {broadcastId && (
-              <StreamDestinations
-                broadcastId={broadcastId}
-                targets={targets}
-                onTargetsChange={fetchBroadcastDetails}
-              />
+              <>
+                <StreamDestinations
+                  broadcastId={broadcastId}
+                  targets={targets}
+                  onTargetsChange={fetchBroadcastDetails}
+                />
+                <BrandSettings
+                  broadcastId={broadcastId}
+                  title={broadcastTitle}
+                  logoUrl={logoUrl}
+                  showLogo={showLogo}
+                  overlayUrl={overlayUrl}
+                  showOverlay={showOverlay}
+                  onUpdate={fetchBroadcastDetails}
+                />
+              </>
             )}
 
+            <div className="flex-1" />
+
             {!isLive ? (
-              <Button className="font-bold" variant="success" onClick={handleGoLive}>Canlı Yayına Geç</Button>
+              <Button className="font-bold bg-green-600 hover:bg-green-700 text-white" onClick={handleGoLive}>
+                Canlı Yayına Geç
+              </Button>
             ) : (
-              <Button className="font-bold" variant="destructive" onClick={handleStopLive}>Yayını Bitir</Button>
+              <Button className="font-bold" variant="destructive" onClick={handleStopLive}>
+                Yayını Bitir
+              </Button>
             )}
           </>
         )}
       </div>
-      <CustomRoomLayout layout={layout} onCompositeTrackPublished={setCompositeTrackSid} setLayout={setLayout} isHost={isHost} />
+      <CustomRoomLayout
+        layout={layout}
+        onCompositeTrackPublished={setCompositeTrackSid}
+        setLayout={setLayout}
+        isHost={isHost}
+        logoUrl={logoUrl}
+        showLogo={showLogo}
+        overlayUrl={overlayUrl}
+        showOverlay={showOverlay}
+      />
     </>
   );
 }

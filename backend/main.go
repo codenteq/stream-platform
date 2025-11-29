@@ -29,13 +29,17 @@ type User struct {
 }
 
 type Broadcast struct {
-	ID         uint              `gorm:"primaryKey" json:"id"`
-	UserID     uint              `gorm:"not null" json:"user_id"`
-	User       User              `gorm:"foreignKey:UserID" json:"user"`
-	Title      string            `gorm:"not null" json:"title"`
-	StudioCode string            `gorm:"unique;not null" json:"studio_code"`
-	Targets    []StreamingTarget `gorm:"foreignKey:BroadcastID" json:"targets"`
-	CreatedAt  time.Time         `json:"created_at"`
+	ID          uint              `gorm:"primaryKey" json:"id"`
+	UserID      uint              `gorm:"not null" json:"user_id"`
+	User        User              `gorm:"foreignKey:UserID" json:"user"`
+	Title       string            `gorm:"not null" json:"title"`
+	StudioCode  string            `gorm:"unique;not null" json:"studio_code"`
+	LogoURL     string            `json:"logo_url"`
+	ShowLogo    bool              `json:"show_logo"`
+	OverlayURL  string            `json:"overlay_url"`
+	ShowOverlay bool              `json:"show_overlay"`
+	Targets     []StreamingTarget `gorm:"foreignKey:BroadcastID" json:"targets"`
+	CreatedAt   time.Time         `json:"created_at"`
 }
 
 type StreamingTarget struct {
@@ -75,7 +79,11 @@ type AuthInput struct {
 }
 
 type BroadcastInput struct {
-	Title string `json:"title"`
+	Title       string `json:"title"`
+	LogoURL     string `json:"logo_url"`
+	ShowLogo    bool   `json:"show_logo"`
+	OverlayURL  string `json:"overlay_url"`
+	ShowOverlay bool   `json:"show_overlay"`
 }
 
 type LiveKitTokenInput struct {
@@ -221,6 +229,10 @@ func UpdateBroadcast(c *fiber.Ctx) error {
 	}
 
 	broadcast.Title = input.Title
+	broadcast.LogoURL = input.LogoURL
+	broadcast.ShowLogo = input.ShowLogo
+	broadcast.OverlayURL = input.OverlayURL
+	broadcast.ShowOverlay = input.ShowOverlay
 	DB.Save(&broadcast)
 
 	return c.JSON(broadcast)
