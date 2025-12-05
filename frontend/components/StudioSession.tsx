@@ -150,6 +150,8 @@ interface CustomRoomLayoutProps {
   showLogo: boolean;
   overlayUrl: string;
   showOverlay: boolean;
+  quality: string;
+  fps: number;
 }
 
 function CustomRoomLayout({
@@ -160,7 +162,9 @@ function CustomRoomLayout({
   logoUrl,
   showLogo,
   overlayUrl,
-  showOverlay
+  showOverlay,
+  quality,
+  fps
 }: CustomRoomLayoutProps) {
   const { localParticipant } = useLocalParticipant();
   const remoteParticipants = useParticipants();
@@ -168,6 +172,10 @@ function CustomRoomLayout({
   const videoElementsRef = useRef<Record<string, HTMLVideoElement>>({});
   const [stageParticipants, setStageParticipants] = useState<StageTrack[]>([]);
   const room = useRoomContext();
+
+  // Determine canvas dimensions based on quality
+  const canvasWidth = quality === '1080p' ? 1920 : (quality === '720p' ? 1280 : 854);
+  const canvasHeight = quality === '1080p' ? 1080 : (quality === '720p' ? 720 : 480);
 
   // Image refs
   const logoImageRef = useRef<HTMLImageElement | null>(null);
@@ -237,13 +245,13 @@ function CustomRoomLayout({
     const canvas = canvasRef.current;
     if (!canvas || !localParticipant) return;
 
-    const stream = canvas.captureStream(30);
+    const stream = canvas.captureStream(fps);
     const videoTrack = stream.getVideoTracks()[0];
     if (!videoTrack) return;
     const track = new LocalVideoTrack(videoTrack);
 
     let publication: TrackPublication | undefined;
-    localParticipant.publishTrack(track, { name: 'canvas-composite' }).then((pub) => {
+    localParticipant.publishTrack(track, { name: 'canvas-composite', simulcast: false }).then((pub) => {
       publication = pub;
       onCompositeTrackPublished(pub.trackSid);
     });
@@ -260,10 +268,13 @@ function CustomRoomLayout({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
 
-    let animationFrameId: number;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    const worker = new Worker('/timer-worker.js');
 
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -298,16 +309,19 @@ function CustomRoomLayout({
       if (showOverlay && overlayImageRef.current) {
         ctx.drawImage(overlayImageRef.current, 0, 0, canvas.width, canvas.height);
       }
-
-      animationFrameId = requestAnimationFrame(draw);
     };
 
-    draw();
+    worker.onmessage = () => {
+      draw();
+    };
+
+    worker.postMessage({ type: 'start', interval: 1000 / fps });
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      worker.postMessage({ type: 'stop' });
+      worker.terminate();
     };
-  }, [stageParticipants, layout, showLogo, showOverlay]);
+  }, [stageParticipants, layout, showLogo, showOverlay, fps]);
 
   // --- SYNC LOGIC ---
 
@@ -403,7 +417,7 @@ function CustomRoomLayout({
 
   return (
     <div className="flex h-full pt-20">
-      <div style={{ display: 'none' }}>
+      <div style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: '1920px', height: '1080px', overflow: 'hidden', zIndex: -1 }}>
         {allParticipants.map(p => {
           // Render both Camera and ScreenShare video tracks to be used by canvas
           const tracks = [Track.Source.Camera, Track.Source.ScreenShare];
@@ -427,7 +441,7 @@ function CustomRoomLayout({
       </div>
 
       <div className="flex-1 flex items-center justify-center bg-black p-4">
-        <canvas ref={canvasRef} width={1280} height={720} className="w-full h-full aspect-video" />
+        <canvas ref={canvasRef} width={canvasWidth} height={canvasHeight} className="w-full h-full aspect-video" />
       </div>
 
       <div className="w-64 bg-gray-900 p-4 flex flex-col gap-4 overflow-y-auto">
@@ -678,6 +692,7 @@ function StudioContent({ studioCode, initialRole = 'guest' }: { studioCode: stri
   const [layout, setLayout] = useState<LayoutMode>('grid');
   const [compositeTrackSid, setCompositeTrackSid] = useState<string | null>(null);
   const [quality, setQuality] = useState<string>('480p');
+  const [fps, setFps] = useState<number>(30);
   const { localParticipant } = useLocalParticipant();
   const remoteParticipants = useParticipants();
   const room = useRoomContext();
@@ -767,7 +782,7 @@ function StudioContent({ studioCode, initialRole = 'guest' }: { studioCode: stri
       const response = await fetchWithAuth(`/api/broadcasts/studio/${studioCode}/start-egress`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trackId: compositeTrackSid, audioTrackId: audioTrackId, quality }),
+        body: JSON.stringify({ trackId: compositeTrackSid, audioTrackId: audioTrackId, quality, fps }),
       });
       if (response.ok) {
         const data = await response.json();
@@ -871,6 +886,16 @@ function StudioContent({ studioCode, initialRole = 'guest' }: { studioCode: stri
               <option value="480p">480p (SD)</option>
             </select>
 
+            <select
+              value={fps}
+              onChange={(e) => setFps(Number(e.target.value))}
+              className="bg-gray-800 text-white border border-gray-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isLive}
+            >
+              <option value="30">30 FPS</option>
+              <option value="60">60 FPS</option>
+            </select>
+
             {broadcastId && (
               <>
                 <StreamDestinations
@@ -913,6 +938,8 @@ function StudioContent({ studioCode, initialRole = 'guest' }: { studioCode: stri
         showLogo={showLogo}
         overlayUrl={overlayUrl}
         showOverlay={showOverlay}
+        quality={quality}
+        fps={fps}
       />
     </>
   );

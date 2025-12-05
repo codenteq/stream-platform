@@ -94,6 +94,7 @@ type TrackEgressInput struct {
 	TrackID      string `json:"trackId"`
 	AudioTrackID string `json:"audioTrackId"`
 	Quality      string `json:"quality"`
+	FPS          int32  `json:"fps"`
 }
 
 type StreamingTargetInput struct {
@@ -355,11 +356,16 @@ func StartEgress(c *fiber.Ctx) error {
 
 	egressClient := lksdk.NewEgressClient(os.Getenv("LIVEKIT_HOST"), os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET"))
 
-	// Determine encoding options based on quality
+	// Determine encoding options based on quality and FPS
 	var width, height, videoBitrate int32
+	fps := input.FPS
+	if fps <= 0 {
+		fps = 30
+	}
+
 	switch input.Quality {
 	case "1080p":
-		width, height, videoBitrate = 1920, 1080, 4500
+		width, height, videoBitrate = 1920, 1080, 6000
 	case "720p":
 		width, height, videoBitrate = 1280, 720, 3000
 	case "480p":
@@ -367,6 +373,11 @@ func StartEgress(c *fiber.Ctx) error {
 	default:
 		// Default to 480p for stability
 		width, height, videoBitrate = 854, 480, 1500
+	}
+
+	// Increase bitrate for 60fps
+	if fps == 60 {
+		videoBitrate = int32(float64(videoBitrate) * 1.5)
 	}
 
 	for _, target := range broadcast.Targets {
@@ -378,14 +389,15 @@ func StartEgress(c *fiber.Ctx) error {
 			AudioTrackId: input.AudioTrackID,
 			Options: &lk_protocol.TrackCompositeEgressRequest_Advanced{
 				Advanced: &lk_protocol.EncodingOptions{
-					Width:          width,
-					Height:         height,
-					Framerate:      30,
-					VideoBitrate:   videoBitrate,
-					VideoCodec:     lk_protocol.VideoCodec_H264_MAIN,
-					AudioBitrate:   128,
-					AudioCodec:     lk_protocol.AudioCodec_AAC,
-					AudioFrequency: 44100,
+					Width:            width,
+					Height:           height,
+					Framerate:        fps,
+					VideoBitrate:     videoBitrate,
+					VideoCodec:       lk_protocol.VideoCodec_H264_HIGH,
+					AudioBitrate:     128,
+					AudioCodec:       lk_protocol.AudioCodec_AAC,
+					AudioFrequency:   44100,
+					KeyFrameInterval: 2.0,
 				},
 			},
 			Output: &lk_protocol.TrackCompositeEgressRequest_Stream{
