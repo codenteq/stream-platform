@@ -2,8 +2,8 @@ port: 7880
 log_level: info
 rtc:
   tcp_port: 7882
-  port_range_start: 50000
-  port_range_end: 50200
+  port_range_start: 50400
+  port_range_end: 50600
   node_ip: "127.0.0.1"
 keys:
   devkey: ThisIsAStrongAndSecureSecretKey32

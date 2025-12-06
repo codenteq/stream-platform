@@ -22,7 +22,7 @@ services:
       - "7880:7880" # Media port
       - "7881:7881" # WebRTC port
       - "7882:7882" # TCP port
-      - "50000-50200:50000-50200/udp" # WebRTC UDP ports
+      - "50400-50600:50400-50600/udp" # WebRTC UDP ports
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml
     restart: unless-stopped
