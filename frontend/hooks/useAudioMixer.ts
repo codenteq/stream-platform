@@ -34,9 +34,7 @@ export function useAudioMixer(room: Room | undefined, localParticipant: LocalPar
         // Publish the mixed track
         // We create a LocalAudioTrack from the destination stream
         const mixedStreamTrack = dest.stream.getAudioTracks()[0];
-        const newMixedTrack = new LocalAudioTrack(mixedStreamTrack, {
-            name: 'broadcast-mix', // Special name we can filter by
-        });
+        const newMixedTrack = new LocalAudioTrack(mixedStreamTrack);
 
         // Publish it
         // We use a custom source or just 'Unknown' to differentiate
@@ -90,13 +88,15 @@ export function useAudioMixer(room: Room | undefined, localParticipant: LocalPar
         if (!room) return;
 
         const handleTrackSubscribed = (track: RemoteTrack, pub: RemoteTrackPublication, participant: RemoteParticipant) => {
-            if (track.kind === Track.Kind.Audio) {
+            if (track.kind === Track.Kind.Audio && track.sid) {
                 addTrackToMix(track, track.sid);
             }
         };
 
         const handleTrackUnsubscribed = (track: RemoteTrack, pub: RemoteTrackPublication, participant: RemoteParticipant) => {
-            removeTrackFromMix(track.sid);
+            if (track.sid) {
+                removeTrackFromMix(track.sid);
+            }
         };
 
         // Subscribe to events
@@ -105,8 +105,8 @@ export function useAudioMixer(room: Room | undefined, localParticipant: LocalPar
 
         // Add existing tracks
         room.remoteParticipants.forEach(p => {
-            p.audioTracks.forEach(pub => {
-                if (pub.track) {
+            Array.from(p.trackPublications.values()).forEach(pub => {
+                if (pub.kind === Track.Kind.Audio && pub.track && pub.track.sid) {
                     addTrackToMix(pub.track, pub.track.sid);
                 }
             });
@@ -131,8 +131,8 @@ export function useAudioMixer(room: Room | undefined, localParticipant: LocalPar
         };
 
         // Check existing
-        localParticipant.audioTracks.forEach(pub => {
-            if (pub.source === Track.Source.Microphone && pub.track) {
+        Array.from(localParticipant.trackPublications.values()).forEach(pub => {
+            if (pub.kind === Track.Kind.Audio && pub.source === Track.Source.Microphone && pub.track) {
                 addTrackToMix(pub.track, 'local-mic');
             }
         });
