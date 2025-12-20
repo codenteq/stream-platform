@@ -1,5 +1,5 @@
 port: 7880
-bind_address: ""
+
 rtc:
     tcp_port: 7882
     port_range_start: 50400
@@ -8,9 +8,7 @@ rtc:
 redis:
     address: redis:6379
 keys:
-    # These will be overridden by environment variables if set, 
-    # but good to have a structure.
-    # API Key/Secret is managed via ENV in docker-compose.
+    devkey: ThisIsAStrongAndSecureSecretKey32
 logging:
     json: false
     level: info

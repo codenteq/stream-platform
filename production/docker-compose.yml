@@ -78,7 +78,11 @@ services:
   frontend:
     image: stream-frontend:latest
     container_name: stream_frontend
-    build: ../frontend
+    build:
+      context: ../frontend
+      args:
+        NEXT_PUBLIC_LIVEKIT_WS_URL: wss://stream.codenteq.com
+        NEXT_PUBLIC_APP_URL: https://stream.codenteq.com
     environment:
       - NEXT_PUBLIC_LIVEKIT_WS_URL=wss://stream.codenteq.com
       - NEXT_PUBLIC_APP_URL=https://stream.codenteq.com

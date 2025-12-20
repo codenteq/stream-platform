@@ -9,7 +9,7 @@ import {
   RoomAudioRenderer,
   useStartAudio,
 } from '@livekit/components-react';
-import { RoomEvent, Track } from 'livekit-client';
+import { RoomEvent, Track, VideoPresets } from 'livekit-client';
 import '@livekit/components-styles';
 import { fetchWithAuth } from '@/lib/utils';
 import { StudioLayout } from '@/components/studio/StudioLayout';
@@ -29,6 +29,8 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { User, LayoutGrid, Settings } from 'lucide-react';
+import { CustomAudioRenderer } from '@/components/CustomAudioRenderer';
+import { useAudioMixer } from '@/hooks/useAudioMixer';
 
 interface StudioSessionProps {
   token: string;
@@ -58,10 +60,13 @@ function StudioContent({ studioCode, initialRole }: { studioCode: string, initia
   const [isLive, setIsLive] = useState<boolean>(false);
   const [layout, setLayout] = useState<'grid' | 'speaker'>('grid');
   const [compositeTrackSid, setCompositeTrackSid] = useState<string | null>(null);
-  const [quality, setQuality] = useState<string>('480p');
+  const [quality, setQuality] = useState<string>('1080p');
   const [fps, setFps] = useState<number>(30);
   const { localParticipant } = useLocalParticipant();
   const room = useRoomContext();
+
+  // Audio Mixing Hook
+  const { mixedTrack } = useAudioMixer(room, localParticipant);
 
   // Role Management
   const [role, setRole] = useState<'host' | 'guest'>(initialRole);
@@ -137,11 +142,18 @@ function StudioContent({ studioCode, initialRole }: { studioCode: string, initia
       return;
     }
 
-    const audioTrack = localParticipant?.getTrackPublication(Track.Source.Microphone);
-    const audioTrackId = audioTrack?.trackSid;
+    // Use the mixed audio track if available, otherwise fallback to microphone
+    // The mixer creates a track named 'broadcast-mix'
+    let audioTrackId = mixedTrack?.sid;
 
     if (!audioTrackId) {
-      alert('Yayın başlatılamıyor. Mikrofon izi bulunamadı. Lütfen mikrofonunuzu açın.');
+      // Fallback or if mixer not ready
+      const audioTrack = localParticipant?.getTrackPublication(Track.Source.Microphone);
+      audioTrackId = audioTrack?.trackSid;
+    }
+
+    if (!audioTrackId) {
+      alert('Yayın başlatılamıyor. Ses kaynağı (mikrofon veya mikser) bulunamadı.');
       return;
     }
 
@@ -232,7 +244,13 @@ function StudioContent({ studioCode, initialRole }: { studioCode: string, initia
 
         <TrackToggle source={Track.Source.Camera} className="bg-gray-800 text-white hover:bg-gray-700 data-[state=on]:bg-green-600">Kamera</TrackToggle>
         <TrackToggle source={Track.Source.Microphone} className="bg-gray-800 text-white hover:bg-gray-700 data-[state=on]:bg-green-600">Mikrofon</TrackToggle>
-        <TrackToggle source={Track.Source.ScreenShare} className="bg-gray-800 text-white hover:bg-gray-700 data-[state=on]:bg-green-600">Ekran</TrackToggle>
+        <TrackToggle
+          source={Track.Source.ScreenShare}
+          captureOptions={{ resolution: VideoPresets.h1080.resolution, audio: true }}
+          className="bg-gray-800 text-white hover:bg-gray-700 data-[state=on]:bg-green-600"
+        >
+          Ekran
+        </TrackToggle>
 
         <Dialog>
           <DialogTrigger asChild>
@@ -340,14 +358,15 @@ export default function StudioSession({ token, serverUrl, studioCode, initialRol
       token={token}
       serverUrl={serverUrl}
       connect={!!token}
-      video={true}
+      video={{ resolution: VideoPresets.h1080.resolution, frameRate: 30 }}
       audio={true}
       data-lk-theme="default"
       style={{ height: '100vh' }}
       onMediaDeviceFailure={(error) => console.error('Media device failure:', error)}
     >
       <StudioContent studioCode={studioCode} initialRole={initialRole} />
-      <RoomAudioRenderer />
+      {/* Replace default renderer with custom one to avoid echo from mixed track */}
+      <CustomAudioRenderer />
       <StartAudioButton />
     </LiveKitRoom>
   );

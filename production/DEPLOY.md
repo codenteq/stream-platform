@@ -24,6 +24,11 @@ This guide assumes you have a VPS with Docker and Docker Compose installed.
     nano .env
     ```
 
+3.1 **Cloudflare Configuration (Important)**:
+    Since you are using Cloudflare, go to your Cloudflare Dashboard > SSL/TLS.
+    Set the SSL/TLS encryption mode to **Flexible**.
+    *Note: Caddy is configured to listen on HTTP (Port 80) to match this setting.*
+
 4.  **Start Services**:
     ```bash
     docker-compose up -d --build
