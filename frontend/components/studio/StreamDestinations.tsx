@@ -16,6 +16,7 @@ export interface StreamingTarget {
     platform: string;
     rtmp_url: string;
     stream_key: string;
+    egress_id?: string;
 }
 
 interface StreamDestinationsProps {

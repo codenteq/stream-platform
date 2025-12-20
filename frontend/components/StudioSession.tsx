@@ -15,6 +15,7 @@ import { fetchWithAuth } from '@/lib/utils';
 import { StudioLayout } from '@/components/studio/StudioLayout';
 import { StreamDestinations, StreamingTarget } from '@/components/studio/StreamDestinations';
 import { BrandSettings } from '@/components/studio/BrandSettings';
+import { DeviceSettings } from '@/components/studio/DeviceSettings';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -27,7 +28,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { User, LayoutGrid } from 'lucide-react';
+import { User, LayoutGrid, Settings } from 'lucide-react';
 
 interface StudioSessionProps {
   token: string;
@@ -113,6 +114,12 @@ function StudioContent({ studioCode, initialRole }: { studioCode: string, initia
         setShowLogo(data.show_logo || false);
         setOverlayUrl(data.overlay_url || '');
         setShowOverlay(data.show_overlay || false);
+
+        // Check if already live
+        const liveTargets = (data.targets || []).filter((t: StreamingTarget) => t.egress_id);
+        if (liveTargets.length > 0) {
+          setIsLive(true);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch broadcast details:', error);
@@ -226,6 +233,23 @@ function StudioContent({ studioCode, initialRole }: { studioCode: string, initia
         <TrackToggle source={Track.Source.Camera} className="bg-gray-800 text-white hover:bg-gray-700 data-[state=on]:bg-green-600">Kamera</TrackToggle>
         <TrackToggle source={Track.Source.Microphone} className="bg-gray-800 text-white hover:bg-gray-700 data-[state=on]:bg-green-600">Mikrofon</TrackToggle>
         <TrackToggle source={Track.Source.ScreenShare} className="bg-gray-800 text-white hover:bg-gray-700 data-[state=on]:bg-green-600">Ekran</TrackToggle>
+
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="secondary" size="icon" className="bg-gray-800 text-white hover:bg-gray-700 ml-2">
+              <Settings className="h-4 w-4" />
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="bg-gray-900 border-gray-800 text-white">
+            <DialogHeader>
+              <DialogTitle>Cihaz Ayarları</DialogTitle>
+              <DialogDescription className="text-gray-400">
+                Kamera ve mikrofon seçiminizi yapın.
+              </DialogDescription>
+            </DialogHeader>
+            <DeviceSettings />
+          </DialogContent>
+        </Dialog>
 
         {isHost && (
           <>
