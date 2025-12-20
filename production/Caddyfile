@@ -1,0 +1,28 @@
+stream.codenteq.com {
+    # Backend API
+    handle_path /api/* {
+        reverse_proxy backend:8000
+    }
+
+    # LiveKit Routes
+    # LiveKit uses /rtc for WebSocket and /signal (if not using separate port)
+    # It also uses /twirp for API calls if needed externally, but usually backend handles that.
+    @livekit_ws {
+        path /rtc /* 
+        header Connection *Upgrade*
+        header Upgrade *websocket*
+    }
+    handle @livekit_ws {
+        reverse_proxy livekit:7880
+    }
+    
+    # Also proxy standard LiveKit paths just in case
+    handle_path /twirp/* {
+         reverse_proxy livekit:7880
+    }
+
+    # Frontend (Catch-all)
+    handle {
+        reverse_proxy frontend:3000
+    }
+}

@@ -1,0 +1,6 @@
+api_key: devkey
+api_secret: ThisIsAStrongAndSecureSecretKey32
+ws_url: ws://livekit:7880
+insecure: true # Internal communication is HTTP/WS
+redis:
+  address: redis:6379
