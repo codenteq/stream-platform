@@ -147,6 +147,10 @@ export function StudioLayout({
         const canvas = canvasRef.current;
         if (!canvas || !localParticipant) return;
 
+        // Update canvas dimensions when quality changes
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+
         const stream = canvas.captureStream(fps);
         const videoTrack = stream.getVideoTracks()[0];
         if (!videoTrack) return;
@@ -162,9 +166,10 @@ export function StudioLayout({
             if (publication) {
                 localParticipant.unpublishTrack(track);
             }
+            track.stop();
             onCompositeTrackPublished(null);
         }
-    }, [localParticipant, onCompositeTrackPublished]);
+    }, [localParticipant, onCompositeTrackPublished, fps, quality, canvasWidth, canvasHeight]);
 
     // Drawing effect
     useEffect(() => {
@@ -274,6 +279,32 @@ export function StudioLayout({
             room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
         };
     }, [room, stageParticipants, layout, broadcastState, isHost]);
+
+    // Cleanup video elements on participant disconnect (prevents memory leak)
+    useEffect(() => {
+        if (!room) return;
+
+        const handleParticipantDisconnected = (participant: Participant) => {
+            // Remove video element references for this participant
+            const keysToDelete = Object.keys(videoElementsRef.current).filter(key =>
+                key.startsWith(`${participant.sid}_`)
+            );
+            keysToDelete.forEach(key => {
+                delete videoElementsRef.current[key];
+            });
+
+            // Also remove from stage if present
+            setStageParticipants(prev =>
+                prev.filter(t => t.participant.sid !== participant.sid)
+            );
+        };
+
+        room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
+
+        return () => {
+            room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
+        };
+    }, [room]);
 
 
     // Actions

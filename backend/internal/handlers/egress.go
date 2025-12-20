@@ -163,7 +163,7 @@ func CreateLiveKitToken(c *fiber.Ctx) error {
 	at.AddGrant(grant).
 		SetIdentity(participantIdentity).
 		SetMetadata(metadata).
-		SetValidFor(time.Hour)
+		SetValidFor(time.Hour * 12) // Extended for long streams
 
 	token, err := at.ToJWT()
 	if err != nil {
@@ -194,7 +194,7 @@ func JoinStudioPublic(c *fiber.Ctx) error {
 		SetIdentity(input.Name).
 		SetName(input.Name).
 		SetMetadata(metadata).
-		SetValidFor(time.Hour)
+		SetValidFor(time.Hour * 12) // Extended for long streams
 
 	token, err := at.ToJWT()
 	if err != nil {

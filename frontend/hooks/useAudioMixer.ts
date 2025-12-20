@@ -26,6 +26,12 @@ export function useAudioMixer(room: Room | undefined, localParticipant: LocalPar
         // Initialize AudioContext
         const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
         const ctx = new AudioContextClass();
+
+        // Resume AudioContext if suspended (browser policy)
+        if (ctx.state === 'suspended') {
+            ctx.resume();
+        }
+
         const dest = ctx.createMediaStreamDestination();
 
         audioContextRef.current = ctx;
@@ -59,7 +65,11 @@ export function useAudioMixer(room: Room | undefined, localParticipant: LocalPar
     // Function to add a track to the mix
     const addTrackToMix = (track: Track | RemoteTrack, id: string) => {
         if (!audioContextRef.current || !destinationRef.current) return;
-        if (sourceNodesRef.current.has(id)) return; // Already added
+
+        // If already exists, remove first (fixes mic toggle issue)
+        if (sourceNodesRef.current.has(id)) {
+            removeTrackFromMix(id);
+        }
 
         if (track.mediaStream) {
             try {
