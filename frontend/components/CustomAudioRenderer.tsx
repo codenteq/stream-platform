@@ -4,9 +4,7 @@ import { useEffect, useRef } from 'react';
 
 export function CustomAudioRenderer() {
     // Select all audio tracks
-    const tracks = useTracks([Track.Source.Microphone, Track.Source.Unknown, Track.Source.ScreenShareAudio], {
-        kind: Track.Kind.Audio,
-    });
+    const tracks = useTracks([Track.Source.Microphone, Track.Source.Unknown, Track.Source.ScreenShare]);
 
     return (
         <div style={{ display: 'none' }}>
