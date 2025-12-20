@@ -246,7 +246,7 @@ function StudioContent({ studioCode, initialRole }: { studioCode: string, initia
         <TrackToggle source={Track.Source.Microphone} className="bg-gray-800 text-white hover:bg-gray-700 data-[state=on]:bg-green-600">Mikrofon</TrackToggle>
         <TrackToggle
           source={Track.Source.ScreenShare}
-          captureOptions={{ resolution: VideoPresets.h1080.resolution, audio: true }}
+          captureOptions={{ audio: true }}
           className="bg-gray-800 text-white hover:bg-gray-700 data-[state=on]:bg-green-600"
         >
           Ekran

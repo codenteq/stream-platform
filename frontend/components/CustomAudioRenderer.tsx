@@ -9,8 +9,12 @@ export function CustomAudioRenderer() {
     return (
         <div style={{ display: 'none' }}>
             {tracks.map((ref) => {
-                // FILTER: Do not play the broadcast mix track to prevent echo
-                // The broadcast mix track is named 'broadcast-mix'
+                // FILTER 1: Do not play local tracks (prevents hearing self)
+                if (ref.participant.isLocal) {
+                    return null;
+                }
+
+                // FILTER 2: Do not play the broadcast mix track (prevents feedback loop "gunshots")
                 if (ref.publication.trackName === 'broadcast-mix') {
                     return null;
                 }

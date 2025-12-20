@@ -51,14 +51,14 @@ func StartEgress(c *fiber.Ctx) error {
 
 	switch input.Quality {
 	case "1080p":
-		width, height, videoBitrate = 1920, 1080, 6000 // Base for 30fps
+		// High bitrate for screen share text readability
+		width, height, videoBitrate = 1920, 1080, 10000
 	case "720p":
-		width, height, videoBitrate = 1280, 720, 4500 // Increased from 3000 for better base quality
+		width, height, videoBitrate = 1280, 720, 6000
 	case "480p":
-		width, height, videoBitrate = 854, 480, 2000
+		width, height, videoBitrate = 854, 480, 3000
 	default:
-		// Default to 480p for stability
-		width, height, videoBitrate = 854, 480, 2000
+		width, height, videoBitrate = 854, 480, 3000
 	}
 
 	// Increase bitrate for 60fps
