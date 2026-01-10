@@ -51,9 +51,21 @@ func StartEgress(c *fiber.Ctx) error {
 		fps = 30
 	}
 
-	// Audio bitrate varsayılan değeri
+	// Bitrate validation constants
+	const (
+		MinVideoBitrate = 1000  // 1 Mbps
+		MaxVideoBitrate = 20000 // 20 Mbps
+		MinAudioBitrate = 64
+		MaxAudioBitrate = 320
+	)
+
+	// Audio bitrate validasyonu
 	if audioBitrate <= 0 {
 		audioBitrate = 128
+	} else if audioBitrate < MinAudioBitrate {
+		audioBitrate = MinAudioBitrate
+	} else if audioBitrate > MaxAudioBitrate {
+		audioBitrate = MaxAudioBitrate
 	}
 
 	// Quality'ye göre boyut ve varsayılan video bitrate
@@ -84,6 +96,16 @@ func StartEgress(c *fiber.Ctx) error {
 	if fps == 60 {
 		videoBitrate = int32(float64(videoBitrate) * 1.5)
 	}
+
+	// Video bitrate validasyonu (60fps artışından sonra)
+	if videoBitrate < MinVideoBitrate {
+		videoBitrate = MinVideoBitrate
+	} else if videoBitrate > MaxVideoBitrate {
+		videoBitrate = MaxVideoBitrate
+	}
+
+	log.Printf("Egress başlatılıyor: Quality=%s, FPS=%d, VideoBitrate=%d kbps, AudioBitrate=%d kbps",
+		input.Quality, fps, videoBitrate, audioBitrate)
 
 	for _, target := range broadcast.Targets {
 		rtmpUrl := target.RTMPUrl

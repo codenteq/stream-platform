@@ -150,8 +150,10 @@ function StudioContent({ studioCode, initialRole }: { studioCode: string, initia
 
 
   const handleGoLive = async () => {
-    if (!compositeTrackSid) {
-      alert('Yayın başlatılamıyor. Kompozit iz bulunamadı.');
+    // Track validasyonu - güncel track ID'lerini al
+    const currentCompositeTrack = compositeTrackSid;
+    if (!currentCompositeTrack) {
+      alert('Yayın başlatılamıyor. Kompozit iz bulunamadı. Lütfen sayfayı yenileyip tekrar deneyin.');
       return;
     }
 
@@ -175,23 +177,63 @@ function StudioContent({ studioCode, initialRole }: { studioCode: string, initia
       return;
     }
 
-    try {
-      const response = await fetchWithAuth(`/api/broadcasts/studio/${studioCode}/start-egress`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trackId: compositeTrackSid, audioTrackId: audioTrackId, quality, fps, videoBitrate, audioBitrate }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        alert(`Yayın başarıyla başlatıldı! Egress ID: ${data.egressId}`);
-        setIsLive(true);
-      } else {
-        const errorData = await response.json();
-        alert(`Yayın başlatılamadı: ${errorData.error || response.statusText}`);
-      }
-    } catch (error: any) {
-      if (!error.message.includes('Session expired')) {
-        alert(`Bir hata oluştu: ${error.message}`);
+    // Retry mekanizması
+    const maxRetries = 3;
+    const baseDelay = 1000; // 1 saniye
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetchWithAuth(`/api/broadcasts/studio/${studioCode}/start-egress`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trackId: currentCompositeTrack,
+            audioTrackId: audioTrackId,
+            quality,
+            fps,
+            videoBitrate,
+            audioBitrate
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          alert(`Yayın başarıyla başlatıldı!`);
+          setIsLive(true);
+          return; // Başarılı, döngüden çık
+        } else {
+          const errorData = await response.json();
+          const errorMessage = errorData.error || response.statusText;
+
+          // Track not found hatası için özel mesaj
+          if (errorMessage.includes('track') && errorMessage.includes('not found')) {
+            alert('Video track bulunamadı. Lütfen kameranızın veya ekran paylaşımınızın aktif olduğundan emin olun ve tekrar deneyin.');
+            return;
+          }
+
+          // Son deneme değilse bekle ve tekrar dene
+          if (attempt < maxRetries) {
+            const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
+            console.log(`Egress başlatma denemesi ${attempt} başarısız, ${delay}ms sonra tekrar deneniyor...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+
+          alert(`Yayın başlatılamadı (${attempt} deneme sonrası): ${errorMessage}`);
+        }
+      } catch (error: any) {
+        if (error.message.includes('Session expired')) {
+          return;
+        }
+
+        if (attempt < maxRetries) {
+          const delay = baseDelay * Math.pow(2, attempt - 1);
+          console.log(`Egress başlatma hatası: ${error.message}, ${delay}ms sonra tekrar deneniyor...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        alert(`Bir hata oluştu (${attempt} deneme sonrası): ${error.message}`);
       }
     }
   };

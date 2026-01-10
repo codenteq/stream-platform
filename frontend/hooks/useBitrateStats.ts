@@ -4,12 +4,22 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRoomContext, useLocalParticipant } from '@livekit/components-react';
 import { Track } from 'livekit-client';
 
-export interface BitrateStats {
-    outboundVideoBitrate: number;   // kbps
-    outboundAudioBitrate: number;   // kbps
-    totalBitrate: number;           // kbps
+export interface BitrateDataPoint {
     timestamp: number;
-    isHealthy: boolean;             // Hedef bitrate'in %50'sinden fazla mı
+    videoBitrate: number;
+    audioBitrate: number;
+    totalBitrate: number;
+    healthPercentage: number;
+}
+
+export interface BitrateStats {
+    outboundVideoBitrate: number;
+    outboundAudioBitrate: number;
+    totalBitrate: number;
+    timestamp: number;
+    isHealthy: boolean;
+    healthPercentage: number;
+    history: BitrateDataPoint[];
 }
 
 interface PrevStatsRef {
@@ -18,14 +28,33 @@ interface PrevStatsRef {
     timestamp: number;
 }
 
+interface UseBitrateStatsOptions {
+    onLowBitrate?: (percentage: number) => void;
+    lowBitrateThreshold?: number;
+    warningCooldownMs?: number;
+    historyDurationMs?: number; // Varsayılan 5 dakika
+    maxHistoryPoints?: number;  // Maksimum veri noktası
+}
+
 export function useBitrateStats(
     targetVideoBitrate: number,
-    intervalMs: number = 2000
+    intervalMs: number = 2000,
+    options?: UseBitrateStatsOptions
 ): BitrateStats | null {
     const room = useRoomContext();
     const { localParticipant } = useLocalParticipant();
     const [stats, setStats] = useState<BitrateStats | null>(null);
     const prevStats = useRef<PrevStatsRef | null>(null);
+    const lastWarningTime = useRef<number>(0);
+    const historyRef = useRef<BitrateDataPoint[]>([]);
+
+    const {
+        onLowBitrate,
+        lowBitrateThreshold = 30,
+        warningCooldownMs = 30000,
+        historyDurationMs = 5 * 60 * 1000, // 5 dakika
+        maxHistoryPoints = 150 // 5 dakika / 2 saniye = 150 nokta
+    } = options || {};
 
     const calculateBitrate = useCallback(async () => {
         if (!localParticipant) return;
@@ -38,7 +67,6 @@ export function useBitrateStats(
             const videoPublication = localParticipant.getTrackPublication(Track.Source.Camera);
             const screenSharePublication = localParticipant.getTrackPublication(Track.Source.ScreenShare);
 
-            // Get stats from video tracks
             for (const pub of [videoPublication, screenSharePublication]) {
                 if (pub?.track?.sender) {
                     const report = await pub.track.sender.getStats();
@@ -70,13 +98,39 @@ export function useBitrateStats(
                     const videoBytesDiff = totalVideoBytes - prevStats.current.videoBytes;
                     const audioBytesDiff = totalAudioBytes - prevStats.current.audioBytes;
 
-                    // Convert to kbps: (bytes * 8 bits) / seconds / 1000
                     const videoBitrate = Math.max(0, Math.round((videoBytesDiff * 8) / timeDiffSeconds / 1000));
                     const audioBitrate = Math.max(0, Math.round((audioBytesDiff * 8) / timeDiffSeconds / 1000));
                     const totalBitrate = videoBitrate + audioBitrate;
 
-                    // Health check: is current bitrate at least 50% of target?
-                    const isHealthy = videoBitrate >= (targetVideoBitrate * 0.5);
+                    const healthPercentage = targetVideoBitrate > 0
+                        ? Math.round((videoBitrate / targetVideoBitrate) * 100)
+                        : 0;
+                    const isHealthy = healthPercentage >= 50;
+
+                    // Low bitrate warning
+                    if (onLowBitrate && healthPercentage < lowBitrateThreshold && healthPercentage > 0) {
+                        const timeSinceLastWarning = now - lastWarningTime.current;
+                        if (timeSinceLastWarning >= warningCooldownMs) {
+                            lastWarningTime.current = now;
+                            onLowBitrate(healthPercentage);
+                        }
+                    }
+
+                    // History management
+                    const newDataPoint: BitrateDataPoint = {
+                        timestamp: now,
+                        videoBitrate,
+                        audioBitrate,
+                        totalBitrate,
+                        healthPercentage
+                    };
+
+                    // Eski verileri temizle ve yeni veri ekle
+                    const cutoffTime = now - historyDurationMs;
+                    historyRef.current = [
+                        ...historyRef.current.filter(p => p.timestamp > cutoffTime),
+                        newDataPoint
+                    ].slice(-maxHistoryPoints);
 
                     setStats({
                         outboundVideoBitrate: videoBitrate,
@@ -84,6 +138,8 @@ export function useBitrateStats(
                         totalBitrate,
                         timestamp: now,
                         isHealthy,
+                        healthPercentage,
+                        history: [...historyRef.current]
                     });
                 }
             }
@@ -96,25 +152,22 @@ export function useBitrateStats(
         } catch (error) {
             console.error('Failed to get bitrate stats:', error);
         }
-    }, [localParticipant, targetVideoBitrate]);
+    }, [localParticipant, targetVideoBitrate, onLowBitrate, lowBitrateThreshold, warningCooldownMs, historyDurationMs, maxHistoryPoints]);
 
     useEffect(() => {
-        // Initial calculation
         calculateBitrate();
-
-        // Set up interval
         const interval = setInterval(calculateBitrate, intervalMs);
-
         return () => {
             clearInterval(interval);
             prevStats.current = null;
         };
     }, [calculateBitrate, intervalMs]);
 
-    // Reset stats when participant changes
     useEffect(() => {
         prevStats.current = null;
+        historyRef.current = [];
         setStats(null);
+        lastWarningTime.current = 0;
     }, [localParticipant]);
 
     return stats;
