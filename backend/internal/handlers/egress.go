@@ -42,26 +42,45 @@ func StartEgress(c *fiber.Ctx) error {
 
 	egressClient := lksdk.NewEgressClient(os.Getenv("LIVEKIT_HOST"), os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET"))
 
-	// Determine encoding options based on quality and FPS
-	var width, height, videoBitrate int32
+	// Determine encoding options based on quality, FPS, and user input
+	var width, height int32
+	videoBitrate := input.VideoBitrate
+	audioBitrate := input.AudioBitrate
 	fps := input.FPS
 	if fps <= 0 {
 		fps = 30
 	}
 
-	switch input.Quality {
-	case "1080p":
-		// High bitrate for screen share text readability
-		width, height, videoBitrate = 1920, 1080, 10000
-	case "720p":
-		width, height, videoBitrate = 1280, 720, 6000
-	case "480p":
-		width, height, videoBitrate = 854, 480, 3000
-	default:
-		width, height, videoBitrate = 854, 480, 3000
+	// Audio bitrate varsayılan değeri
+	if audioBitrate <= 0 {
+		audioBitrate = 128
 	}
 
-	// Increase bitrate for 60fps
+	// Quality'ye göre boyut ve varsayılan video bitrate
+	switch input.Quality {
+	case "1080p":
+		width, height = 1920, 1080
+		if videoBitrate <= 0 {
+			videoBitrate = 10000 // Varsayılan: Yüksek
+		}
+	case "720p":
+		width, height = 1280, 720
+		if videoBitrate <= 0 {
+			videoBitrate = 6000
+		}
+	case "480p":
+		width, height = 854, 480
+		if videoBitrate <= 0 {
+			videoBitrate = 3000
+		}
+	default:
+		width, height = 854, 480
+		if videoBitrate <= 0 {
+			videoBitrate = 3000
+		}
+	}
+
+	// 60fps için bitrate'i %50 artır
 	if fps == 60 {
 		videoBitrate = int32(float64(videoBitrate) * 1.5)
 	}
@@ -80,7 +99,7 @@ func StartEgress(c *fiber.Ctx) error {
 					Framerate:        fps,
 					VideoBitrate:     videoBitrate,
 					VideoCodec:       lk_protocol.VideoCodec_H264_HIGH,
-					AudioBitrate:     128,
+					AudioBitrate:     audioBitrate,
 					AudioCodec:       lk_protocol.AudioCodec_AAC,
 					AudioFrequency:   44100,
 					KeyFrameInterval: 2.0,

@@ -59,6 +59,8 @@ type TrackEgressInput struct {
 	AudioTrackID string `json:"audioTrackId"`
 	Quality      string `json:"quality"`
 	FPS          int32  `json:"fps"`
+	VideoBitrate int32  `json:"videoBitrate"` // kbps cinsinden, 0 ise varsayılan kullanılır
+	AudioBitrate int32  `json:"audioBitrate"` // kbps cinsinden, 0 ise varsayılan 128 kullanılır
 }
 
 type StreamingTargetInput struct {

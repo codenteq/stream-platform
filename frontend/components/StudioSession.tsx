@@ -62,6 +62,8 @@ function StudioContent({ studioCode, initialRole }: { studioCode: string, initia
   const [compositeTrackSid, setCompositeTrackSid] = useState<string | null>(null);
   const [quality, setQuality] = useState<string>('1080p');
   const [fps, setFps] = useState<number>(30);
+  const [videoBitrate, setVideoBitrate] = useState<number>(10000);
+  const [audioBitrate] = useState<number>(128);
   const { localParticipant } = useLocalParticipant();
   const room = useRoomContext();
 
@@ -86,6 +88,16 @@ function StudioContent({ studioCode, initialRole }: { studioCode: string, initia
   useEffect(() => {
     setRole(initialRole);
   }, [initialRole]);
+
+  // Quality değiştiğinde varsayılan bitrate'i güncelle
+  useEffect(() => {
+    const defaultBitrates: Record<string, number> = {
+      '1080p': 10000,
+      '720p': 6000,
+      '480p': 3000
+    };
+    setVideoBitrate(defaultBitrates[quality] || 3000);
+  }, [quality]);
 
   useEffect(() => {
     const updateRole = () => {
@@ -166,7 +178,7 @@ function StudioContent({ studioCode, initialRole }: { studioCode: string, initia
       const response = await fetchWithAuth(`/api/broadcasts/studio/${studioCode}/start-egress`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trackId: compositeTrackSid, audioTrackId: audioTrackId, quality, fps }),
+        body: JSON.stringify({ trackId: compositeTrackSid, audioTrackId: audioTrackId, quality, fps, videoBitrate, audioBitrate }),
       });
       if (response.ok) {
         const data = await response.json();
@@ -301,6 +313,38 @@ function StudioContent({ studioCode, initialRole }: { studioCode: string, initia
             >
               <option value="30">30 FPS</option>
               <option value="60">60 FPS</option>
+            </select>
+
+            <select
+              value={videoBitrate}
+              onChange={(e) => setVideoBitrate(Number(e.target.value))}
+              className="bg-gray-800 text-white border border-gray-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isLive}
+            >
+              {quality === '1080p' && (
+                <>
+                  <option value="4500">Düşük (4.5 Mbps)</option>
+                  <option value="8000">Orta (8 Mbps)</option>
+                  <option value="10000">Yüksek (10 Mbps)</option>
+                  <option value="15000">Çok Yüksek (15 Mbps)</option>
+                </>
+              )}
+              {quality === '720p' && (
+                <>
+                  <option value="2500">Düşük (2.5 Mbps)</option>
+                  <option value="4500">Orta (4.5 Mbps)</option>
+                  <option value="6000">Yüksek (6 Mbps)</option>
+                  <option value="8000">Çok Yüksek (8 Mbps)</option>
+                </>
+              )}
+              {quality === '480p' && (
+                <>
+                  <option value="1500">Düşük (1.5 Mbps)</option>
+                  <option value="2500">Orta (2.5 Mbps)</option>
+                  <option value="3000">Yüksek (3 Mbps)</option>
+                  <option value="4500">Çok Yüksek (4.5 Mbps)</option>
+                </>
+              )}
             </select>
 
             {broadcastId && (
