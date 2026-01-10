@@ -31,6 +31,7 @@ import { Input } from '@/components/ui/input';
 import { User, LayoutGrid, Settings } from 'lucide-react';
 import { CustomAudioRenderer } from '@/components/CustomAudioRenderer';
 import { useAudioMixer } from '@/hooks/useAudioMixer';
+import { BitrateIndicator } from '@/components/studio/BitrateIndicator';
 
 interface StudioSessionProps {
   token: string;
@@ -367,6 +368,13 @@ function StudioContent({ studioCode, initialRole }: { studioCode: string, initia
             )}
 
             <div className="flex-1" />
+
+            {isLive && (
+              <BitrateIndicator
+                targetBitrate={fps === 60 ? Math.round(videoBitrate * 1.5) : videoBitrate}
+                isLive={isLive}
+              />
+            )}
 
             {!isLive ? (
               <Button className="font-bold bg-green-600 hover:bg-green-700 text-white" onClick={handleGoLive}>

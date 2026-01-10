@@ -36,7 +36,7 @@ services:
       - "7880:7880"
       - "7881:7881"
       - "7882:7882"
-      - "50000-60000:50000-60000/udp"
+      - "50400-50600:50400-50600/udp"
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml
     restart: always
