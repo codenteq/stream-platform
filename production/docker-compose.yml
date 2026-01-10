@@ -39,6 +39,12 @@ services:
       - "50400-50600:50400-50600/udp"
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:7880"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: always
 
   egress:
@@ -48,8 +54,10 @@ services:
     volumes:
       - ./egress.yaml:/etc/egress.yaml
     depends_on:
-      - livekit
-      - redis
+      livekit:
+        condition: service_healthy
+      redis:
+        condition: service_started
     # Egress needs shared memory for Chrome
     shm_size: 4gb
     restart: always
