@@ -64,7 +64,6 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: "ss01" 0;
   }
   h1, h2, h3 {
     text-wrap: balance;
@@ -75,18 +74,15 @@
   .scrollbar-thin {
     scrollbar-width: thin;
   }
-  /* Archivo'nun geniş kesimi: başlıklar ve yayın grafikleri için */
+  /* Geist'in büyük boyuttaki karakteri: sıkı harf aralığı, genişlik ekseni yok. */
   .font-display {
-    font-stretch: 118%;
-    font-variation-settings: "wdth" 118;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
   }
-  .font-wide {
-    font-stretch: 125%;
-    font-variation-settings: "wdth" 125;
-  }
+  /* Zaman kodu, bit hızı, maskeli anahtar gibi ölçüm değerleri: Geist Mono ile
+     hizalı rakamlar. Düzyazıdan ayrışsın diye tek yerde kullanılır. */
   .tabular {
     font-variant-numeric: tabular-nums;
+    font-family: var(--font-geist-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
   }
   /* Logodaki gün doğumu → okyanus geçişi. Yalnızca marka işaretinde kullanılır. */
   .brand-mark-gradient {

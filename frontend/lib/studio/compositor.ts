@@ -203,7 +203,7 @@ export function shade(hex: string, amount: number) {
 const FALLBACK_FONT = '"Segoe UI", system-ui, -apple-system, sans-serif';
 let cachedFont: string | null = null;
 
-/** Sayfanın Archivo ailesini (next/font'un ürettiği adla) canvas için döndürür. */
+/** Sayfanın yazı tipi ailesini (next/font'un ürettiği adla) canvas için döndürür. */
 function fontFamily() {
   if (cachedFont) return cachedFont;
   if (typeof document === 'undefined') return FALLBACK_FONT;
@@ -212,12 +212,6 @@ function fontFamily() {
   // Canvas yazı tipini ancak yüklendikten sonra kullanabilir
   document.fonts?.load(`700 32px ${family}`).catch(() => undefined);
   return family;
-}
-
-/** Yayın grafikleri için geniş kesim (tarayıcı destekliyorsa) */
-function setStretch(ctx: CanvasRenderingContext2D, value: 'normal' | 'expanded') {
-  const c = ctx as CanvasRenderingContext2D & { fontStretch?: string };
-  if ('fontStretch' in c) c.fontStretch = value;
 }
 
 function tagStyle(theme: BrandTheme, color: string) {
@@ -267,7 +261,6 @@ function renderTag(name: string, brand: BrandConfig, fs: number, maxW: number, c
   const ctx = canvas.getContext('2d')!;
   const font = `${s.weight} ${fs}px ${family}`;
   ctx.font = font;
-  setStretch(ctx, 'expanded');
   const text = s.upper ? name.toUpperCase() : name;
   const padX = fs * 0.7;
   const padY = fs * 0.42;
@@ -284,7 +277,6 @@ function renderTag(name: string, brand: BrandConfig, fs: number, maxW: number, c
   canvas.height = Math.ceil(h + margin * 2);
   // Boyut değişince bağlam sıfırlanır
   ctx.font = font;
-  setStretch(ctx, 'expanded');
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.25)';
   ctx.shadowBlur = fs * 0.4;
@@ -346,7 +338,6 @@ export function drawBanner(ctx: CanvasRenderingContext2D, banner: Banner, brand:
     ctx.fillStyle = s.bg === 'rgba(15,23,42,0.62)' ? 'rgba(15,23,42,0.85)' : s.bg;
     ctx.fillRect(0, y, W, h);
     ctx.font = `${s.weight} ${fs}px ${fontFamily()}`;
-    setStretch(ctx, 'expanded');
     ctx.fillStyle = s.fg;
     ctx.textBaseline = 'middle';
     const text = (s.upper ? banner.text.toUpperCase() : banner.text) + '     •     ';
@@ -359,14 +350,12 @@ export function drawBanner(ctx: CanvasRenderingContext2D, banner: Banner, brand:
     ctx.clip();
     for (let x = -offset; x < W; x += tw) ctx.fillText(text, x, y + h / 2);
     ctx.restore();
-    setStretch(ctx, 'normal');
     return;
   }
 
   const scale = brand.theme === 'bold' ? 1.15 : 1;
   const fs = H * 0.04 * scale;
   ctx.font = `${s.weight} ${fs}px ${fontFamily()}`;
-  setStretch(ctx, 'expanded');
   const maxW = W * 0.84;
   const lines = wrapLines(ctx, s.upper ? banner.text.toUpperCase() : banner.text, maxW, 2);
   const lineH = fs * 1.25;
@@ -393,7 +382,6 @@ export function drawBanner(ctx: CanvasRenderingContext2D, banner: Banner, brand:
   ctx.fillStyle = s.fg;
   ctx.textBaseline = 'middle';
   lines.forEach((l, i) => ctx.fillText(l, x + accentW + padX, y + padY + lineH * i + lineH / 2));
-  setStretch(ctx, 'normal');
 }
 
 export function drawAvatarPlaceholder(ctx: CanvasRenderingContext2D, box: Box, name: string, color: string) {
