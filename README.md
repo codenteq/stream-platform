@@ -6,7 +6,7 @@ Built with Next.js, Go (Fiber), PostgreSQL and [LiveKit](https://livekit.io).
 
 ## Features
 
-- **Multistreaming:** connect destinations once, then pick which ones each broadcast goes to. Outputs start in parallel and are reported per destination.
+- **Multistreaming:** connect destinations once, then pick which ones each broadcast goes to. The show is encoded once and sent to all of them; if one destination drops, the others keep streaming.
 - **Guests by link:** guests join from a link without an account. They wait backstage until the host adds them to the stage.
 - **Backstage and stage:** only people on stage are seen and heard on air. Guests watch the program feed, so they see exactly what viewers see.
 - **Seven layouts:** solo, thin, group, leader, screen + sidebar, picture-in-picture and cinema, switchable while live.
@@ -37,7 +37,7 @@ The show is composed in the host's browser:
 1. Everyone publishes their camera, mic and screen share to LiveKit.
 2. The host draws the stage onto a `<canvas>`: layout, name tags, banners, logo and overlay. That canvas is published as a single `canvas-composite` video track.
 3. A WebAudio mixer in the host's browser mixes the audio of on-stage participants only, and publishes it as a `broadcast-mix` track. A limiter prevents clipping, and an adjustable delay keeps audio in sync with the composited video.
-4. When the host goes live, the API asks LiveKit Egress to push those two tracks to every selected destination over RTMP.
+4. When the host goes live, the API starts one LiveKit Egress job that encodes those two tracks once and pushes them to every selected destination over RTMP.
 5. Guests subscribe to the composite track, so their preview matches the stream.
 
 Because the composition happens in the browser, what the host sees is what goes on air, and the server side stays a standard LiveKit deployment.
@@ -172,6 +172,7 @@ Before going to production:
 - Replace the LiveKit key and secret in `livekit.yaml`, `egress.yaml` and the backend environment, and set a strong `JWT_SECRET`.
 - Egress runs a headless Chrome and needs enough shared memory; the compose file sets `shm_size: 2gb`.
 - Open the LiveKit UDP port range so WebRTC media can reach the server.
+- Egress encodes on the CPU. Plan about 2.5 dedicated vCPUs per live 1080p60 broadcast (about 1.5 at 1080p30), however many destinations it streams to, plus about 1.5 vCPUs for the rest of the stack.
 
 ### Docker images
 
