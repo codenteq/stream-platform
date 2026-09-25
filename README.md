@@ -177,3 +177,7 @@ Before going to production:
 - Destinations are added with an RTMP server URL and stream key. Signing in to a platform (OAuth) is not supported, so platform chat and comments are not shown in the studio.
 - Recordings are made in the host's browser and downloaded there. There is no cloud recording.
 - The show is composed in the host's browser. The host needs a reasonably fast computer and a stable uplink, around the chosen video bitrate plus headroom.
+
+## License
+
+[MIT](LICENSE)
