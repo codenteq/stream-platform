@@ -55,7 +55,7 @@ function StatusBadge({ b }: { b: Broadcast }) {
 
 /** Küçük önizleme: yayının kendi marka rengi, alt bandı ve logosu */
 function Thumbnail({ b }: { b: Broadcast }) {
-  const color = b.brand_color || '#2446D8';
+  const color = b.brand_color || '#0E63A6';
   return (
     <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-md bg-bezel sm:w-40" style={{ backgroundImage: `linear-gradient(135deg, ${color}55, transparent 70%)` }}>
       <div className="absolute inset-[7%] bottom-[30%] grid grid-cols-2 gap-[4%]">

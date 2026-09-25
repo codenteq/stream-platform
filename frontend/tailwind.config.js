@@ -45,6 +45,9 @@ module.exports = {
         cue: "hsl(var(--cue))",
         bezel: "hsl(var(--bezel))",
         studio: "hsl(var(--studio))",
+        dawn: "hsl(var(--dawn))",
+        tide: "hsl(var(--tide))",
+        wave: "hsl(var(--wave))",
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",

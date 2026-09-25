@@ -4,47 +4,55 @@
 
 @layer base {
   /*
-   * Yayın stüdyosu paleti: soğuk stüdyo grisi zemin, lacivert mürekkep,
-   * eylemler için kobalt. Tally kırmızısı yalnızca "yayında" durumları için,
-   * kehribar planlanmış/beklemede durumları için kullanılır.
+   * Codenteq paleti: markanın kendi lacivertinden (yazı, arayüz mürekkebi)
+   * ve logodaki gün doğumu → okyanus geçişinden (sarı → yeşil → deniz mavisi)
+   * türetildi. Geçiş yalnızca marka işaretinde kullanılır; arayüzün geneli
+   * lacivert ve tek bir deniz mavisiyle sakin kalır. Tally kırmızısı yalnızca
+   * "yayında" durumları için, kehribar planlanmış/beklemede durumları için —
+   * ikisi de marka değil, yayıncılık kuralı, değiştirilmedi.
    */
   :root {
     --background: 0 0% 100%;
-    --foreground: 219 47% 12%;
+    --foreground: 216 78% 19%;
 
     --card: 0 0% 100%;
-    --card-foreground: 219 47% 12%;
+    --card-foreground: 216 78% 19%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 219 47% 12%;
+    --popover-foreground: 216 78% 19%;
 
-    --primary: 229 71% 49%;
+    --primary: 206 84% 35%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 27% 96%;
-    --secondary-foreground: 219 47% 12%;
+    --secondary: 213 40% 96%;
+    --secondary-foreground: 216 78% 19%;
 
-    --muted: 220 20% 94%;
-    --muted-foreground: 220 14% 42%;
+    --muted: 213 36% 95%;
+    --muted-foreground: 216 19% 44%;
 
-    --accent: 228 81% 95%;
-    --accent-foreground: 229 72% 38%;
+    --accent: 209 60% 93%;
+    --accent-foreground: 206 84% 28%;
 
     --destructive: 2 77% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 152 64% 34%;
+    --success: 171 76% 29%;
     --success-foreground: 0 0% 100%;
 
     --live: 2 77% 51%;
     --cue: 38 100% 43%;
 
-    --border: 220 21% 89%;
-    --input: 220 18% 84%;
-    --ring: 229 71% 49%;
+    --border: 215 32% 90%;
+    --input: 214 29% 83%;
+    --ring: 206 84% 35%;
 
-    --studio: 218 18% 92%;
-    --bezel: 219 48% 9%;
+    --studio: 213 36% 95%;
+    --bezel: 216 76% 13%;
+
+    /* Yalnızca marka işaretinde kullanılan logo geçişi: gün doğumu → deniz. */
+    --dawn: 45 88% 59%;
+    --tide: 175 64% 34%;
+    --wave: 201 88% 44%;
 
     --radius: 0.5rem;
   }
@@ -79,6 +87,10 @@
   }
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+  /* Logodaki gün doğumu → okyanus geçişi. Yalnızca marka işaretinde kullanılır. */
+  .brand-mark-gradient {
+    background: linear-gradient(135deg, hsl(var(--dawn)) 0%, hsl(var(--tide)) 45%, hsl(var(--wave)) 72%, hsl(var(--foreground)) 100%);
   }
 }
 
