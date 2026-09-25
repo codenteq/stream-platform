@@ -37,7 +37,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # Release v1.2.3 is tagged 1.2.3, 1.2 and latest (pre-releases get only
-      # 1.2.3-rc.1). Every image also gets a sha-<commit> tag.
+      # 1.2.3-rc.1). A manual run is tagged with its branch name, e.g. main.
       - name: Image tags and labels
         id: meta
         uses: docker/metadata-action@v5
@@ -46,7 +46,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha
+            type=ref,event=branch
 
       # The frontend bakes these URLs into the browser bundle at build time.
       # Set them as repository variables to build for another host. The
@@ -63,3 +63,7 @@ jobs:
             NEXT_PUBLIC_APP_URL=${{ vars.NEXT_PUBLIC_APP_URL || 'https://stream.codenteq.com' }}
           cache-from: type=gha,scope=${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+          # Without a provenance attestation each build is a single image
+          # manifest, so the registry shows one version per build instead of
+          # extra untagged entries.
+          provenance: false

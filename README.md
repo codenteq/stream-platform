@@ -180,7 +180,7 @@ Publishing a GitHub release builds the backend and frontend images and pushes th
 - `ghcr.io/codenteq/stream-platform-backend`
 - `ghcr.io/codenteq/stream-platform-frontend`
 
-A release tagged `v1.2.3` produces the tags `1.2.3`, `1.2` and `latest`. Pre-releases get only their full version, such as `1.3.0-rc.1`. Every image is also tagged `sha-<commit>`. The workflow can also be started by hand from the Actions tab.
+A release tagged `v1.2.3` produces the tags `1.2.3`, `1.2` and `latest`. Pre-releases get only their full version, such as `1.3.0-rc.1`. The workflow can also be started by hand from the Actions tab; those images are tagged with the branch name, such as `main`.
 
 The frontend image contains the LiveKit and app URLs it was built with. They default to `wss://stream.codenteq.com` and `https://stream.codenteq.com`. To build for another host, set the repository variables `NEXT_PUBLIC_LIVEKIT_WS_URL` and `NEXT_PUBLIC_APP_URL` under Settings → Secrets and variables → Actions → Variables.
 
