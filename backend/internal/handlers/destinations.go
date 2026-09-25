@@ -70,8 +70,12 @@ func UpdateDestination(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": msg})
 	}
 
+	destinationID, ok := paramID(c, "id")
+	if !ok {
+		return invalidID(c)
+	}
 	var destination models.Destination
-	if err := database.DB.First(&destination, "id = ? AND user_id = ?", c.Params("id"), userId).Error; err != nil {
+	if err := database.DB.First(&destination, "id = ? AND user_id = ?", destinationID, userId).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Destination not found"})
 	}
 
@@ -97,8 +101,12 @@ func UpdateDestination(c *fiber.Ctx) error {
 func DeleteDestination(c *fiber.Ctx) error {
 	userId := getUserIdFromToken(c)
 
+	destinationID, ok := paramID(c, "id")
+	if !ok {
+		return invalidID(c)
+	}
 	var destination models.Destination
-	if err := database.DB.First(&destination, "id = ? AND user_id = ?", c.Params("id"), userId).Error; err != nil {
+	if err := database.DB.First(&destination, "id = ? AND user_id = ?", destinationID, userId).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Destination not found"})
 	}
 

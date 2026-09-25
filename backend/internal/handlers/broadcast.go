@@ -102,7 +102,10 @@ func CreateBroadcast(c *fiber.Ctx) error {
 
 func UpdateBroadcast(c *fiber.Ctx) error {
 	userId := getUserIdFromToken(c)
-	broadcastId := c.Params("id")
+	broadcastId, ok := paramID(c, "id")
+	if !ok {
+		return invalidID(c)
+	}
 	input := new(models.BroadcastInput)
 
 	if err := c.BodyParser(input); err != nil {
@@ -110,7 +113,7 @@ func UpdateBroadcast(c *fiber.Ctx) error {
 	}
 
 	var broadcast models.Broadcast
-	if result := database.DB.First(&broadcast, broadcastId); result.Error != nil {
+	if result := database.DB.First(&broadcast, "id = ?", broadcastId); result.Error != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Broadcast not found"})
 	}
 
@@ -182,10 +185,13 @@ func UpdateBroadcast(c *fiber.Ctx) error {
 
 func DeleteBroadcast(c *fiber.Ctx) error {
 	userId := getUserIdFromToken(c)
-	broadcastId := c.Params("id")
+	broadcastId, ok := paramID(c, "id")
+	if !ok {
+		return invalidID(c)
+	}
 
 	var broadcast models.Broadcast
-	if result := database.DB.First(&broadcast, broadcastId); result.Error != nil {
+	if result := database.DB.First(&broadcast, "id = ?", broadcastId); result.Error != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Broadcast not found"})
 	}
 

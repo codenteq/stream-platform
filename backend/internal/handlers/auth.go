@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +13,20 @@ import (
 	"stream-platform/backend/internal/database"
 	"stream-platform/backend/internal/models"
 )
+
+// paramID, yol parametresini pozitif bir tam sayı olarak okur. Ham parametre hiçbir zaman
+// SQL koşulu olarak kullanılmamalı: GORM, sayısal olmayan bir dizeyi olduğu gibi WHERE'e koyar.
+func paramID(c *fiber.Ctx, name string) (uint, bool) {
+	id, err := strconv.ParseUint(c.Params(name), 10, 64)
+	if err != nil || id == 0 {
+		return 0, false
+	}
+	return uint(id), true
+}
+
+func invalidID(c *fiber.Ctx) error {
+	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid id"})
+}
 
 func getUserIdFromToken(c *fiber.Ctx) uint {
 	user := c.Locals("user").(*jwt.Token)

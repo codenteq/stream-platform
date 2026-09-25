@@ -9,7 +9,10 @@ import (
 
 func GetStreamingTargets(c *fiber.Ctx) error {
 	userId := getUserIdFromToken(c)
-	broadcastId := c.Params("id")
+	broadcastId, ok := paramID(c, "id")
+	if !ok {
+		return invalidID(c)
+	}
 
 	var broadcast models.Broadcast
 	if err := database.DB.First(&broadcast, "id = ? AND user_id = ?", broadcastId, userId).Error; err != nil {
@@ -24,7 +27,10 @@ func GetStreamingTargets(c *fiber.Ctx) error {
 
 func AddStreamingTarget(c *fiber.Ctx) error {
 	userId := getUserIdFromToken(c)
-	broadcastId := c.Params("id")
+	broadcastId, ok := paramID(c, "id")
+	if !ok {
+		return invalidID(c)
+	}
 	input := new(models.StreamingTargetInput)
 
 	if err := c.BodyParser(input); err != nil {
@@ -52,8 +58,14 @@ func AddStreamingTarget(c *fiber.Ctx) error {
 
 func DeleteStreamingTarget(c *fiber.Ctx) error {
 	userId := getUserIdFromToken(c)
-	broadcastId := c.Params("id")
-	targetId := c.Params("targetId")
+	broadcastId, ok := paramID(c, "id")
+	if !ok {
+		return invalidID(c)
+	}
+	targetId, ok := paramID(c, "targetId")
+	if !ok {
+		return invalidID(c)
+	}
 
 	var broadcast models.Broadcast
 	if err := database.DB.First(&broadcast, "id = ? AND user_id = ?", broadcastId, userId).Error; err != nil {
