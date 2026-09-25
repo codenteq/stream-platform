@@ -63,7 +63,12 @@ services:
     restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      # Yerel geliştirme: tarayıcı LiveKit'e ve davet linklerine localhost üzerinden erişir
+      args:
+        NEXT_PUBLIC_LIVEKIT_WS_URL: ws://localhost:7880
+        NEXT_PUBLIC_APP_URL: http://localhost:3001
     container_name: stream_frontend
     ports:
       - "3001:3000"
