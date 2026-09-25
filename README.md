@@ -4,6 +4,14 @@ A browser-based live broadcast studio. Invite guests with a link, bring them on 
 
 Built with Next.js, Go (Fiber), PostgreSQL and [LiveKit](https://livekit.io).
 
+## Screenshots
+
+![Landing page](docs/screenshots/landing.png)
+
+|                                     Dashboard                                     |                                  Studio                                   |
+| :---------------------------------------------------------------------------------: | :--------------------------------------------------------------------------: |
+| ![Dashboard: list of upcoming and past broadcasts](docs/screenshots/dashboard.png) | ![Studio: stage, layouts and branding panel](docs/screenshots/studio.png) |
+
 ## Features
 
 - **Multistreaming:** connect destinations once, then pick which ones each broadcast goes to. The show is encoded once and sent to all of them; if one destination drops, the others keep streaming.

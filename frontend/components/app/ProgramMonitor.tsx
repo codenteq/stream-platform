@@ -51,7 +51,7 @@ export function ProgramMonitor({ className }: { className?: string }) {
         </span>
         <span className="tabular">1080p30</span>
       </div>
-      <div className="relative aspect-video overflow-hidden rounded-[8px]" style={{ background: 'linear-gradient(135deg, #1b2c4f, #0b1321)' }}>
+      <div className="relative aspect-video overflow-hidden rounded-[8px]" style={{ background: 'linear-gradient(135deg, #123157, #081c3b)' }}>
         <div className="absolute inset-[4%] grid grid-cols-2 gap-[2%] pb-[12%]">
           <CameraFeed tone="warm" name="Ayşe Demir" />
           <CameraFeed tone="cool" name="Mehmet Kaya" />
