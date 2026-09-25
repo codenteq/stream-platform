@@ -1,5 +1,6 @@
-api_key: devkey
-api_secret: ThisIsAStrongAndSecureSecretKey32
+# Must match the key and secret in livekit.yaml.
+api_key: replace-with-api-key
+api_secret: replace-with-api-secret-of-at-least-32-chars
 ws_url: ws://livekit:7880
 insecure: true # Internal communication is HTTP/WS
 redis:
