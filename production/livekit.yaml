@@ -8,7 +8,9 @@ rtc:
 redis:
     address: redis:6379
 keys:
-    devkey: ThisIsAStrongAndSecureSecretKey32
+    # Replace with your own API key and secret (secret: 32+ random characters, e.g. `openssl rand -base64 32`).
+    # Use the same values in egress.yaml and in LIVEKIT_API_KEY / LIVEKIT_API_SECRET in .env.
+    replace-with-api-key: replace-with-api-secret-of-at-least-32-chars
 logging:
     json: false
     level: info

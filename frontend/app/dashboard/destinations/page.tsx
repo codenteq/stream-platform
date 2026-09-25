@@ -1,151 +1,161 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
+import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
+import { PageHeader } from '@/components/app/AppShell';
+import { DestinationDialog } from '@/components/app/DestinationDialog';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { api } from '@/lib/api';
+import { PlatformAvatar, getPlatform } from '@/lib/platforms';
+import type { Destination } from '@/lib/types';
 
-interface Destination {
-    id: string;
-    name: string;
-    url: string;
+function maskKey(key: string) {
+  if (key.length <= 4) return '••••';
+  return `••••••••${key.slice(-4)}`;
 }
 
 export default function DestinationsPage() {
-    const [destinations, setDestinations] = useState<Destination[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [isCreateOpen, setCreateOpen] = useState(false);
-    const [newDestinationName, setNewDestinationName] = useState('');
-    const [newDestinationUrl, setNewDestinationUrl] = useState('');
+  const [destinations, setDestinations] = useState<Destination[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Destination | null>(null);
+  const [deleting, setDeleting] = useState<Destination | null>(null);
 
-    const fetchDestinations = async () => {
-        const token = localStorage.getItem('token');
-        try {
-            setLoading(true);
-            const res = await fetch('/api/destinations', {
-                headers: { 'Authorization': `Bearer ${token}` },
-            });
-            if (!res.ok) throw new Error('Yayın hedefleri getirilemedi.');
-            const data = await res.json();
-            setDestinations(data || []);
-        } catch (err: any) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
+  const load = useCallback(async () => {
+    try {
+      setDestinations(await api.destinations());
+    } catch (err: any) {
+      if (!String(err.message).includes('Session expired')) setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const remove = async () => {
+    if (!deleting) return;
+    try {
+      await api.deleteDestination(deleting.id);
+      setDestinations((prev) => prev.filter((d) => d.id !== deleting.id));
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-8 md:px-10 md:py-10">
+      <PageHeader
+        title="Hedefler"
+        description="Yayın yapacağınız kanalları bağlayın. Her yayında hangi hedeflere çıkacağınızı seçebilirsiniz."
+        actions={
+          <Button
+            size="lg"
+            className="gap-2"
+            onClick={() => {
+              setEditing(null);
+              setDialogOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" /> Hedef ekle
+          </Button>
         }
-    };
+      />
 
-    useEffect(() => {
-        fetchDestinations();
-    }, []);
+      {error && <p className="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
 
-    const handleAddDestination = async (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        const token = localStorage.getItem('token');
-        try {
-            const res = await fetch('/api/destinations', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ name: newDestinationName, url: newDestinationUrl }),
-            });
-            if (!res.ok) {
-                const errData = await res.json();
-                throw new Error(errData.details || 'Hedef eklenemedi.');
-            }
-            // After adding, refetch the entire list to ensure data consistency
-            await fetchDestinations(); 
-            setNewDestinationName('');
-            setNewDestinationUrl('');
-            setCreateOpen(false);
-        } catch (err: any) {
-            setError(err.message);
-        }
-    };
-
-    const handleDeleteDestination = async (id: string) => {
-        const token = localStorage.getItem('token');
-        try {
-            const res = await fetch(`/api/destinations/${id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` },
-            });
-            if (!res.ok) throw new Error('Hedef silinemedi.');
-            // After deleting, refetch the list to ensure data consistency
-            await fetchDestinations(); 
-        } catch (err: any) {
-            setError(err.message);
-        } 
-    };
-
-    return (
-        <div className="container mx-auto p-4 md:p-8">
-            <div className="flex items-center justify-between mb-8">
-                <h1 className="text-3xl font-bold">Yayın Hedefleri</h1>
-                <div className="flex items-center gap-2">
-                    <Dialog open={isCreateOpen} onOpenChange={setCreateOpen}>
-                        <DialogTrigger asChild><Button>Yeni Hedef Ekle</Button></DialogTrigger>
-                        <DialogContent className="sm:max-w-[425px]">
-                            <form onSubmit={handleAddDestination}>
-                                <DialogHeader>
-                                    <DialogTitle>Yeni Yayın Hedefi</DialogTitle>
-                                    <DialogDescription>RTMP URL'ini ve yayın anahtarını girin.</DialogDescription>
-                                </DialogHeader>
-                                <div className="grid gap-4 py-4">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="name">İsim (Örn: YouTube)</Label>
-                                        <Input id="name" value={newDestinationName} onChange={(e) => setNewDestinationName(e.target.value)} required />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="url">RTMP URL + Yayın Anahtarı</Label>
-                                        <Input id="url" placeholder="rtmp://a.rtmp.youtube.com/live2/your-stream-key" value={newDestinationUrl} onChange={(e) => setNewDestinationUrl(e.target.value)} required />
-                                    </div>
-                                </div>
-                                <DialogFooter><Button type="submit">Ekle</Button></DialogFooter>
-                            </form>
-                        </DialogContent>
-                    </Dialog>
-                    <Button variant="outline" asChild><Link href="/dashboard">Panele Geri Dön</Link></Button>
-                </div>
-            </div>
-
-            {error && <p className="text-destructive mb-4">Hata: {error}</p>}
-
-            {loading ? (
-                <p>Yükleniyor...</p>
-            ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {destinations.length > 0 ? (
-                        destinations.map((dest) => (
-                            <Card key={dest.id}>
-                                <CardHeader><CardTitle>{dest.name}</CardTitle></CardHeader>
-                                <CardContent><p className="text-sm text-muted-foreground truncate">{dest.url}</p></CardContent>
-                                <CardFooter className="flex justify-end">
-                                    <AlertDialog>
-                                        <AlertDialogTrigger asChild><Button variant="destructive">Sil</Button></AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                            <AlertDialogHeader>
-                                                <AlertDialogTitle>Emin misiniz?</AlertDialogTitle>
-                                                <AlertDialogDescription>Bu işlem geri alınamaz. Bu hedef kalıcı olarak silinecektir.</AlertDialogDescription>
-                                            </AlertDialogHeader>
-                                            <AlertDialogFooter>
-                                                <AlertDialogCancel>İptal</AlertDialogCancel>
-                                                <AlertDialogAction onClick={() => handleDeleteDestination(dest.id)}>Sil</AlertDialogAction>
-                                            </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                    </AlertDialog>
-                                </CardFooter>
-                            </Card>
-                        ))
-                    ) : (
-                        <div className="col-span-full text-center text-muted-foreground py-10"><p>Henüz bir yayın hedefi eklemediniz.</p></div>
-                    )}
-                </div>
-            )}
+      {loading ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {[0, 1].map((i) => (
+            <div key={i} className="h-20 animate-pulse rounded-xl bg-background" />
+          ))}
         </div>
-    );
+      ) : destinations.length === 0 ? (
+        <div className="rounded-xl border bg-background px-6 py-12">
+          <div className="mx-auto max-w-md text-center">
+            <div className="mb-5 flex justify-center -space-x-2">
+              {['YouTube', 'Facebook', 'LinkedIn', 'Twitch', 'X', 'Kick'].map((p) => (
+                <PlatformAvatar key={p} platform={p} size={36} ring />
+              ))}
+            </div>
+            <h3 className="font-display text-xl font-bold">İlk hedefinizi bağlayın</h3>
+            <p className="mt-2 text-sm text-muted-foreground">Bir hedef ekledikten sonra her yayında hangi platformlara çıkacağınızı seçebilirsiniz.</p>
+            <Button className="mt-6 gap-2" onClick={() => setDialogOpen(true)}>
+              <Plus className="h-4 w-4" /> Hedef ekle
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <ul className="divide-y overflow-hidden rounded-xl border bg-background">
+          {destinations.map((d) => (
+            <li key={d.id} className="flex items-center gap-4 px-4 py-3.5">
+              <PlatformAvatar platform={d.platform} size={44} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[15px] font-semibold">{d.name}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {getPlatform(d.platform).label}
+                  <span className="tabular ml-3 tracking-wider">{maskKey(d.stream_key)}</span>
+                </p>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label="Diğer">
+                    <MoreHorizontal className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      setEditing(d);
+                      setDialogOpen(true);
+                    }}
+                  >
+                    <Pencil /> Düzenle
+                  </DropdownMenuItem>
+                  <DropdownMenuItem destructive onSelect={() => setDeleting(d)}>
+                    <Trash2 /> Kaldır
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <DestinationDialog open={dialogOpen} onOpenChange={setDialogOpen} destination={editing} onSaved={() => load()} />
+
+      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hedef kaldırılsın mı?</AlertDialogTitle>
+            <AlertDialogDescription>
+              “{deleting?.name}” hesabınızdan ve bu hedefi kullanan yayınlardan kaldırılacak.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={remove}>
+              Kaldır
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
 }

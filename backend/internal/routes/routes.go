@@ -16,6 +16,7 @@ func SetupRoutes(app *fiber.App) {
 	api.Post("/register", handlers.Register)
 	api.Post("/login", handlers.Login)
 	api.Post("/public/join-studio", handlers.JoinStudioPublic)
+	api.Get("/public/studio/:studioCode", handlers.GetPublicStudioInfo)
 
 	// Protected routes
 	protected := api.Group("/", jwtware.New(jwtware.Config{
@@ -23,6 +24,13 @@ func SetupRoutes(app *fiber.App) {
 	}))
 
 	protected.Get("/me", handlers.GetCurrentUser)
+	protected.Put("/me", handlers.UpdateCurrentUser)
+
+	// Account-level destinations
+	protected.Get("/destinations", handlers.GetDestinations)
+	protected.Post("/destinations", handlers.CreateDestination)
+	protected.Put("/destinations/:id", handlers.UpdateDestination)
+	protected.Delete("/destinations/:id", handlers.DeleteDestination)
 
 	// Broadcasts
 	protected.Get("/broadcasts", handlers.GetBroadcasts)
@@ -40,4 +48,6 @@ func SetupRoutes(app *fiber.App) {
 	protected.Post("/livekit/token", handlers.CreateLiveKitToken)
 	protected.Post("/broadcasts/studio/:studioCode/start-egress", handlers.StartEgress)
 	protected.Post("/broadcasts/studio/:studioCode/stop-egress", handlers.StopEgress)
+	protected.Post("/broadcasts/studio/:studioCode/participants/remove", handlers.RemoveParticipant)
+	protected.Post("/broadcasts/studio/:studioCode/participants/mute", handlers.MuteParticipant)
 }

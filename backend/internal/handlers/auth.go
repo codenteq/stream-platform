@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -11,6 +13,20 @@ import (
 	"stream-platform/backend/internal/database"
 	"stream-platform/backend/internal/models"
 )
+
+// paramID, yol parametresini pozitif bir tam sayı olarak okur. Ham parametre hiçbir zaman
+// SQL koşulu olarak kullanılmamalı: GORM, sayısal olmayan bir dizeyi olduğu gibi WHERE'e koyar.
+func paramID(c *fiber.Ctx, name string) (uint, bool) {
+	id, err := strconv.ParseUint(c.Params(name), 10, 64)
+	if err != nil || id == 0 {
+		return 0, false
+	}
+	return uint(id), true
+}
+
+func invalidID(c *fiber.Ctx) error {
+	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid id"})
+}
 
 func getUserIdFromToken(c *fiber.Ctx) uint {
 	user := c.Locals("user").(*jwt.Token)
@@ -30,7 +46,12 @@ func Register(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
 	}
 
-	user := models.User{Email: input.Email, PasswordHash: string(hashedPassword)}
+	input.Email = strings.TrimSpace(strings.ToLower(input.Email))
+	if input.Email == "" || len(input.Password) < 6 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "E-posta ve en az 6 karakterli şifre gerekli"})
+	}
+
+	user := models.User{Name: strings.TrimSpace(input.Name), Email: input.Email, PasswordHash: string(hashedPassword)}
 
 	if result := database.DB.Create(&user); result.Error != nil {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Email already exists"})
@@ -46,7 +67,7 @@ func Login(c *fiber.Ctx) error {
 	}
 
 	var user models.User
-	if result := database.DB.First(&user, "email = ?", input.Email); result.Error != nil {
+	if result := database.DB.First(&user, "email = ?", strings.TrimSpace(strings.ToLower(input.Email))); result.Error != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid email or password"})
 	}
 
@@ -75,5 +96,22 @@ func GetCurrentUser(c *fiber.Ctx) error {
 	if result := database.DB.First(&user, userId); result.Error != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
+	return c.JSON(user)
+}
+
+func UpdateCurrentUser(c *fiber.Ctx) error {
+	userId := getUserIdFromToken(c)
+	input := new(models.UpdateProfileInput)
+	if err := c.BodyParser(input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
+	}
+
+	var user models.User
+	if result := database.DB.First(&user, userId); result.Error != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+	}
+
+	user.Name = strings.TrimSpace(input.Name)
+	database.DB.Save(&user)
 	return c.JSON(user)
 }

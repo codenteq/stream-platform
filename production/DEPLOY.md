@@ -19,10 +19,12 @@ This guide assumes you have a VPS with Docker and Docker Compose installed.
     ```
 
 3.  **Configure Environment**:
-    Edit `.env` file and change the passwords and secrets!
+    Create `.env` from the example and replace every value:
     ```bash
+    cp .env.example .env
     nano .env
     ```
+    Pick a LiveKit API key and secret (`openssl rand -base64 32` generates a good secret) and put the same pair in `livekit.yaml` (`keys`) and `egress.yaml` (`api_key`, `api_secret`). Never deploy with the placeholder values.
 
 3.1 **Cloudflare Configuration (Important)**:
     Since you are using Cloudflare, go to your Cloudflare Dashboard > SSL/TLS.
