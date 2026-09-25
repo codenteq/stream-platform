@@ -143,6 +143,7 @@ frontend/
   hooks/                 compositor, audio mixer, recorder, data channel
   lib/studio/            layout math, canvas drawing, studio types
 production/              production compose file, Caddy config and deploy guide
+.github/workflows/       release image builds
 ```
 
 ## Testing
@@ -171,6 +172,24 @@ Before going to production:
 - Replace the LiveKit key and secret in `livekit.yaml`, `egress.yaml` and the backend environment, and set a strong `JWT_SECRET`.
 - Egress runs a headless Chrome and needs enough shared memory; the compose file sets `shm_size: 2gb`.
 - Open the LiveKit UDP port range so WebRTC media can reach the server.
+
+### Docker images
+
+Publishing a GitHub release builds the backend and frontend images and pushes them to GitHub Container Registry:
+
+- `ghcr.io/codenteq/stream-platform-backend`
+- `ghcr.io/codenteq/stream-platform-frontend`
+
+A release tagged `v1.2.3` produces the tags `1.2.3`, `1.2` and `latest`. Pre-releases get only their full version, such as `1.3.0-rc.1`. Every image is also tagged `sha-<commit>`. The workflow can also be started by hand from the Actions tab.
+
+The frontend image contains the LiveKit and app URLs it was built with. They default to `wss://stream.codenteq.com` and `https://stream.codenteq.com`. To build for another host, set the repository variables `NEXT_PUBLIC_LIVEKIT_WS_URL` and `NEXT_PUBLIC_APP_URL` under Settings → Secrets and variables → Actions → Variables.
+
+While the repository is private, its packages are private too. Log in with a personal access token that has the `read:packages` scope before pulling:
+
+```bash
+echo "$TOKEN" | docker login ghcr.io -u <github-username> --password-stdin
+docker pull ghcr.io/codenteq/stream-platform-backend:latest
+```
 
 ## Known limitations
 
