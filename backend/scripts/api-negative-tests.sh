@@ -5,13 +5,13 @@
 # Kullanım:
 #   API_URL=http://localhost:8000/api JWT_SECRET=dev-secret bash scripts/api-negative-tests.sh
 #
-# JWT_SECRET yalnızca "süresi geçmiş/yanlış imzalı token" testleri için gerekir; verilmezse
-# bu iki test atlanır. Süresi geçmiş token testi için `pip install pyjwt` gerekir.
+# JWT_SECRET yalnızca imzalı token testleri için gerekir; verilmezse bu testler atlanır ve
+# özette "atlandi" olarak gösterilir. Gereksinimler: curl ve python3 (ek paket gerekmez).
 set -u
 B="${API_URL:-http://localhost:8000/api}"
 SECRET="${JWT_SECRET:-}"
 J='Content-Type: application/json'
-pass=0; fail=0
+pass=0; fail=0; skip=0
 
 check() {
   if [ "$2" = "$3" ]; then pass=$((pass+1)); printf '  \033[32mPASS\033[0m %s (%s)\n' "$1" "$3"
@@ -19,7 +19,18 @@ check() {
 }
 code() { curl -s -o /dev/null -w "%{http_code}" "$@"; }
 body() { curl -s "$@"; }
-jwt() { python3 -c "import jwt,sys;print(jwt.encode({'user_id':1,'exp':$1},'$2',algorithm='HS256'))" 2>/dev/null; }
+# HS256 token üretir; yalnızca Python standart kütüphanesini kullanır.
+# $1: şu andan itibaren geçerlilik süresi (saniye, eksi olabilir), $2: imza anahtarı
+jwt() {
+  python3 - "$1" "$2" <<'PY'
+import base64, hashlib, hmac, json, sys, time
+def b64(b): return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+head = b64(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
+claims = b64(json.dumps({"user_id": 1, "exp": int(time.time()) + int(sys.argv[1])}).encode())
+sig = hmac.new(sys.argv[2].encode(), f"{head}.{claims}".encode(), hashlib.sha256).digest()
+print(f"{head}.{claims}.{b64(sig)}")
+PY
+}
 
 rand=$RANDOM
 curl -s -XPOST $B/register -H "$J" -d "{\"name\":\"Owner\",\"email\":\"owner$rand@x.com\",\"password\":\"secret123\"}" >/dev/null
@@ -36,10 +47,12 @@ check "token yok" 401 "$(code $B/broadcasts)"
 check "bozuk token" 401 "$(code $B/broadcasts -H 'Authorization: Bearer not.a.jwt')"
 check "bos Bearer" 401 "$(code $B/broadcasts -H 'Authorization: Bearer ')"
 if [ -n "$SECRET" ]; then
-  W=$(jwt 'int(__import__("time").time())+99' 'wrong-secret')
-  E=$(jwt 'int(__import__("time").time())-10' "$SECRET")
-  [ -n "$W" ] && check "yanlis imzali token" 401 "$(code $B/broadcasts -H "Authorization: Bearer $W")"
-  [ -n "$E" ] && check "suresi gecmis token" 401 "$(code $B/broadcasts -H "Authorization: Bearer $E")"
+  # Kontrol: doğru imzalı token kabul edilmeli. Bu geçmezse aşağıdaki 401'ler de anlamsızdır.
+  check "gecerli token kabul edildi (kontrol)" 200 "$(code $B/broadcasts -H "Authorization: Bearer $(jwt 99 "$SECRET")")"
+  check "yanlis imzali token" 401 "$(code $B/broadcasts -H "Authorization: Bearer $(jwt 99 wrong-secret)")"
+  check "suresi gecmis token" 401 "$(code $B/broadcasts -H "Authorization: Bearer $(jwt -10 "$SECRET")")"
+else
+  skip=$((skip+3)); printf '  \033[33mATLANDI\033[0m imzali token testleri (3): JWT_SECRET verilmedi\n'
 fi
 
 echo "== 2. Kayit/giris dogrulama =="
@@ -81,5 +94,7 @@ check "isimsiz misafir girisi" 400 "$(code -XPOST $B/public/join-studio -H "$J" 
 check "olmayan studyoya misafir girisi" 404 "$(code -XPOST $B/public/join-studio -H "$J" -d '{"studioCode":"nope","name":"Ali"}')"
 
 echo
-printf 'Toplam: \033[32m%d gecti\033[0m, \033[31m%d basarisiz\033[0m\n' "$pass" "$fail"
+printf 'Toplam: \033[32m%d gecti\033[0m, \033[31m%d basarisiz\033[0m' "$pass" "$fail"
+[ "$skip" -gt 0 ] && printf ', \033[33m%d atlandi\033[0m' "$skip"
+echo
 [ "$fail" -eq 0 ]

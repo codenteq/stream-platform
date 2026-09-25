@@ -160,7 +160,7 @@ Negative API tests run against a live backend. They cover authentication (missin
 API_URL=http://localhost:8000/api JWT_SECRET=change-me bash backend/scripts/api-negative-tests.sh
 ```
 
-`JWT_SECRET` must match the backend's. It is only used by the token tests, which are skipped without it and need `pip install pyjwt`.
+`JWT_SECRET` must match the backend's. It is only used by the signed-token tests, which are skipped (and reported as skipped) without it. The script needs `curl` and `python3`, with no extra packages.
 
 ## Deployment
 
