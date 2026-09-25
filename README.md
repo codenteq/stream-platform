@@ -155,6 +155,12 @@ cd backend
 go test ./...
 ```
 
+The go-live tests run the start, restart and stop flows against a fake egress service. They need a PostgreSQL database and are skipped unless `TEST_DB_SOURCE` is set:
+
+```bash
+TEST_DB_SOURCE="postgresql://user:password@localhost:5432/stream_db?sslmode=disable" go test ./...
+```
+
 Negative API tests run against a live backend. They cover authentication (missing, malformed, expired and wrongly signed tokens), ownership checks, isolation between users, and input validation:
 
 ```bash
