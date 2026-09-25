@@ -36,8 +36,62 @@ func egressGone(err error) bool {
 		strings.Contains(msg, "failed_precondition") || strings.Contains(msg, "cannot be stopped")
 }
 
+// egressAPI, handler'ların kullandığı LiveKit egress çağrılarıdır; testlerde sahtesiyle değiştirilir.
+type egressAPI interface {
+	StartTrackCompositeEgress(ctx context.Context, req *lk_protocol.TrackCompositeEgressRequest) (*lk_protocol.EgressInfo, error)
+	UpdateStream(ctx context.Context, req *lk_protocol.UpdateStreamRequest) (*lk_protocol.EgressInfo, error)
+	StopEgress(ctx context.Context, req *lk_protocol.StopEgressRequest) (*lk_protocol.EgressInfo, error)
+	ListEgress(ctx context.Context, req *lk_protocol.ListEgressRequest) (*lk_protocol.ListEgressResponse, error)
+}
+
+var newEgressClient = func() egressAPI {
+	return lksdk.NewEgressClient(os.Getenv("LIVEKIT_HOST"), os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET"))
+}
+
+// streamURL, hedefin RTMP adresini yayın anahtarıyla birleştirir.
+func streamURL(t models.StreamingTarget) string {
+	return fmt.Sprintf("%s/%s", strings.TrimSuffix(t.RTMPUrl, "/"), t.StreamKey)
+}
+
+// uniqueStreamURLs, hedeflerin adreslerini sırayı koruyarak tekilleştirir; aynı adrese giden
+// iki hedef egress'te tek çıkış olur.
+func uniqueStreamURLs(targets []models.StreamingTarget) []string {
+	seen := make(map[string]bool, len(targets))
+	urls := make([]string, 0, len(targets))
+	for _, t := range targets {
+		if u := streamURL(t); !seen[u] {
+			seen[u] = true
+			urls = append(urls, u)
+		}
+	}
+	return urls
+}
+
+// egressIDsOf, hedeflerde kayıtlı farklı egress kimliklerini sırayla döner. Yayın başına tek
+// egress olduğundan normalde en fazla bir tanedir; hedef başına egress açan eski sürümden
+// kalan yayınlar da bu sayede durdurulabilir.
+func egressIDsOf(targets []models.StreamingTarget) []string {
+	seen := map[string]bool{}
+	var ids []string
+	for _, t := range targets {
+		if t.EgressID != "" && !seen[t.EgressID] {
+			seen[t.EgressID] = true
+			ids = append(ids, t.EgressID)
+		}
+	}
+	return ids
+}
+
+func targetIDs(targets []models.StreamingTarget) []uint {
+	ids := make([]uint, len(targets))
+	for i, t := range targets {
+		ids[i] = t.ID
+	}
+	return ids
+}
+
 // activeEgressIDs, odadaki hâlâ çalışan egress'lerin kimliklerini döner.
-func activeEgressIDs(ctx context.Context, client *lksdk.EgressClient, room string) (map[string]bool, error) {
+func activeEgressIDs(ctx context.Context, client egressAPI, room string) (map[string]bool, error) {
 	res, err := client.ListEgress(ctx, &lk_protocol.ListEgressRequest{RoomName: room, Active: true})
 	if err != nil {
 		return nil, err
@@ -74,30 +128,37 @@ func StartEgress(c *fiber.Ctx) error {
 	unlock := lockBroadcast(broadcast.ID)
 	defer unlock()
 	// Kilit beklenirken başka bir istek hedefleri değiştirmiş olabilir; güncel hâlini oku.
-	database.DB.Where("broadcast_id = ?", broadcast.ID).Find(&broadcast.Targets)
+	database.DB.Where("broadcast_id = ?", broadcast.ID).Order("id").Find(&broadcast.Targets)
 
-	egressClient := lksdk.NewEgressClient(os.Getenv("LIVEKIT_HOST"), os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET"))
+	egressClient := newEgressClient()
 
-	// Kayıtlı ama artık çalışmayan egress'leri temizle; yeniden başlatmada hepsini durdur.
+	// Yeniden başlatmada çalışan egress'i durdur; kayıtlı ama artık çalışmayanları temizle.
+	if input.Restart {
+		for _, id := range egressIDsOf(broadcast.Targets) {
+			stopCtx, cancelStop := context.WithTimeout(context.Background(), 10*time.Second)
+			if _, err := egressClient.StopEgress(stopCtx, &lk_protocol.StopEgressRequest{EgressId: id}); err != nil && !egressGone(err) {
+				log.Printf("Restart: failed to stop egress %s: %v", id, err)
+			}
+			cancelStop()
+		}
+	}
 	listCtx, cancelList := context.WithTimeout(context.Background(), 10*time.Second)
 	active, listErr := activeEgressIDs(listCtx, egressClient, broadcast.StudioCode)
 	cancelList()
+	var stale []uint
 	for i := range broadcast.Targets {
 		t := &broadcast.Targets[i]
 		if t.EgressID == "" {
 			continue
 		}
-		if input.Restart {
-			stopCtx, cancelStop := context.WithTimeout(context.Background(), 10*time.Second)
-			if _, err := egressClient.StopEgress(stopCtx, &lk_protocol.StopEgressRequest{EgressId: t.EgressID}); err != nil && !egressGone(err) {
-				log.Printf("Restart: failed to stop egress %s: %v", t.EgressID, err)
-			}
-			cancelStop()
-		} else if listErr != nil || active[t.EgressID] {
+		if !input.Restart && (listErr != nil || active[t.EgressID]) {
 			continue // gerçekten yayında (ya da doğrulanamadı): dokunma
 		}
 		t.EgressID = ""
-		database.DB.Model(t).Update("egress_id", "")
+		stale = append(stale, t.ID)
+	}
+	if len(stale) > 0 {
+		database.DB.Model(&models.StreamingTarget{}).Where("id IN ?", stale).Update("egress_id", "")
 	}
 
 	// Determine encoding options based on quality, FPS, and user input
@@ -174,23 +235,30 @@ func StartEgress(c *fiber.Ctx) error {
 	started := []targetResult{}
 	failed := []targetResult{}
 
-	// Hedefler paralel başlatılır; biri yavaş/erişilemez olsa da diğerleri beklemez.
-	var (
-		wg sync.WaitGroup
-		mu sync.Mutex
-	)
-	for _, target := range broadcast.Targets {
-		if target.EgressID != "" {
-			// Bu hedef zaten yayında.
-			started = append(started, targetResult{ID: target.ID, Platform: target.Platform, Name: target.Name})
-			continue
+	var live, pending []models.StreamingTarget
+	for _, t := range broadcast.Targets {
+		if t.EgressID != "" {
+			live = append(live, t)
+			started = append(started, targetResult{ID: t.ID, Platform: t.Platform, Name: t.Name})
+		} else {
+			pending = append(pending, t)
 		}
+	}
 
-		wg.Add(1)
-		go func(target models.StreamingTarget) {
-			defer wg.Done()
-
-			req := &lk_protocol.TrackCompositeEgressRequest{
+	// Yayın başına tek egress: görüntü bir kez kodlanır ve tüm hedeflere gönderilir. Bir hedefin
+	// bağlantısı koparsa egress yalnızca o çıkışı bırakır, diğerleri sürer.
+	if len(pending) > 0 {
+		urls := uniqueStreamURLs(pending)
+		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+		var egressID string
+		var err error
+		if running := egressIDsOf(live); len(running) > 0 {
+			// Yayın sürüyor: yeni hedefleri çalışan egress'e ekle, ikinci bir kodlama başlatma.
+			egressID = running[0]
+			_, err = egressClient.UpdateStream(ctx, &lk_protocol.UpdateStreamRequest{EgressId: egressID, AddOutputUrls: urls})
+		} else {
+			var info *lk_protocol.EgressInfo
+			info, err = egressClient.StartTrackCompositeEgress(ctx, &lk_protocol.TrackCompositeEgressRequest{
 				RoomName:     broadcast.StudioCode,
 				VideoTrackId: input.TrackID,
 				AudioTrackId: input.AudioTrackID,
@@ -210,28 +278,28 @@ func StartEgress(c *fiber.Ctx) error {
 				Output: &lk_protocol.TrackCompositeEgressRequest_Stream{
 					Stream: &lk_protocol.StreamOutput{
 						Protocol: lk_protocol.StreamProtocol_RTMP,
-						Urls:     []string{fmt.Sprintf("%s/%s", strings.TrimSuffix(target.RTMPUrl, "/"), target.StreamKey)},
+						Urls:     urls,
 					},
 				},
+			})
+			if err == nil {
+				egressID = info.EgressId
 			}
+		}
+		cancel()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
-			defer cancel()
-			egress, err := egressClient.StartTrackCompositeEgress(ctx, req)
-
-			mu.Lock()
-			defer mu.Unlock()
-			if err != nil {
-				log.Printf("Failed to start egress for target %d: %v", target.ID, err)
-				failed = append(failed, targetResult{ID: target.ID, Platform: target.Platform, Name: target.Name, Error: err.Error()})
-				return
+		if err != nil {
+			log.Printf("Failed to start egress for broadcast %d (%d outputs): %v", broadcast.ID, len(urls), err)
+			for _, t := range pending {
+				failed = append(failed, targetResult{ID: t.ID, Platform: t.Platform, Name: t.Name, Error: err.Error()})
 			}
-			target.EgressID = egress.EgressId
-			database.DB.Model(&target).Update("egress_id", egress.EgressId)
-			started = append(started, targetResult{ID: target.ID, Platform: target.Platform, Name: target.Name})
-		}(target)
+		} else {
+			database.DB.Model(&models.StreamingTarget{}).Where("id IN ?", targetIDs(pending)).Update("egress_id", egressID)
+			for _, t := range pending {
+				started = append(started, targetResult{ID: t.ID, Platform: t.Platform, Name: t.Name})
+			}
+		}
 	}
-	wg.Wait()
 
 	if len(started) == 0 {
 		errMsg := "Failed to start egress for all targets"
@@ -272,29 +340,31 @@ func StopEgress(c *fiber.Ctx) error {
 
 	unlock := lockBroadcast(broadcast.ID)
 	defer unlock()
-	database.DB.Where("broadcast_id = ?", broadcast.ID).Find(&broadcast.Targets)
+	database.DB.Where("broadcast_id = ?", broadcast.ID).Order("id").Find(&broadcast.Targets)
 
-	egressClient := lksdk.NewEgressClient(os.Getenv("LIVEKIT_HOST"), os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET"))
+	egressClient := newEgressClient()
 
 	stillRunning := []string{}
-	for _, target := range broadcast.Targets {
-		if target.EgressID == "" {
-			continue
-		}
+	for _, id := range egressIDsOf(broadcast.Targets) {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		_, err := egressClient.StopEgress(ctx, &lk_protocol.StopEgressRequest{EgressId: target.EgressID})
+		_, err := egressClient.StopEgress(ctx, &lk_protocol.StopEgressRequest{EgressId: id})
 		cancel()
 		if err != nil && !egressGone(err) {
 			// Kimliği koru ki durdurma yeniden denenebilsin; yoksa egress yetim kalır.
-			log.Printf("Failed to stop egress %s for target %d: %v", target.EgressID, target.ID, err)
-			name := target.Name
-			if name == "" {
-				name = target.Platform
+			log.Printf("Failed to stop egress %s for broadcast %d: %v", id, broadcast.ID, err)
+			for _, t := range broadcast.Targets {
+				if t.EgressID != id {
+					continue
+				}
+				name := t.Name
+				if name == "" {
+					name = t.Platform
+				}
+				stillRunning = append(stillRunning, name)
 			}
-			stillRunning = append(stillRunning, name)
 			continue
 		}
-		database.DB.Model(&target).Update("egress_id", "")
+		database.DB.Model(&models.StreamingTarget{}).Where("broadcast_id = ? AND egress_id = ?", broadcast.ID, id).Update("egress_id", "")
 	}
 
 	if len(stillRunning) > 0 {
