@@ -57,7 +57,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             href={href}
             className={cn(
               'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-              active ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              active ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
             )}
           >
             <Icon className="h-[18px] w-[18px]" />
@@ -91,9 +91,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="flex min-h-screen bg-muted/60">
+    <div className="flex min-h-screen bg-muted">
       {/* Masaüstü kenar çubuğu */}
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-background px-4 py-5 md:flex">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-background px-3 py-5 md:flex">
         <Logo href="/dashboard" className="px-2" />
         <div className="mt-8 flex-1">{nav}</div>
         <a
@@ -128,10 +128,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: React.ReactNode }) {
   return (
-    <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-        {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
+        <h1 className="font-display text-[28px] font-bold leading-tight">{title}</h1>
+        {description && <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">{description}</p>}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
     </div>

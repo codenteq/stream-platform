@@ -124,7 +124,7 @@ export function BrandPanel({ brand, onChange }: { brand: BrandConfig; onChange: 
         </div>
         <label className="mt-3 flex items-center gap-2 rounded-lg border px-2 py-1.5">
           <input type="color" value={brand.color} onChange={(e) => onChange({ color: e.target.value })} className="h-7 w-9 cursor-pointer rounded border-0 bg-transparent p-0" />
-          <span className="font-mono text-xs uppercase text-muted-foreground">{brand.color}</span>
+          <span className="tabular text-xs uppercase text-muted-foreground">{brand.color}</span>
           <span className="ml-auto text-xs text-muted-foreground">Özel renk</span>
         </label>
       </Section>

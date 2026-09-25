@@ -1,12 +1,14 @@
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
+/** Kamera gövdesi ve üstünde tally ışığı: yayında olduğunu gösteren kırmızı nokta */
 export function LogoMark({ className }: { className?: string }) {
   return (
-    <span className={cn('inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm', className)}>
-      <svg viewBox="0 0 24 24" className="h-[60%] w-[60%]" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="6" width="12" height="12" rx="2.5" />
-        <path d="M15 10.5l5-3v9l-5-3" fill="currentColor" />
+    <span className={cn('relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-foreground', className)}>
+      <svg viewBox="0 0 32 32" className="h-full w-full" aria-hidden>
+        <rect x="7" y="11" width="13" height="11" rx="2.5" fill="#fff" />
+        <path d="M20.5 15.2 25 12.6v7.8l-4.5-2.6z" fill="#fff" />
+        <circle cx="24.5" cy="7.5" r="2.6" className="fill-live" />
       </svg>
     </span>
   );
@@ -14,13 +16,9 @@ export function LogoMark({ className }: { className?: string }) {
 
 export function Logo({ href = '/', className, compact }: { href?: string; className?: string; compact?: boolean }) {
   return (
-    <Link href={href} className={cn('inline-flex items-center gap-2 font-semibold tracking-tight text-foreground', className)}>
+    <Link href={href} className={cn('inline-flex items-center gap-2.5 text-foreground', className)}>
       <LogoMark />
-      {!compact && (
-        <span className="text-[17px]">
-          Codenteq<span className="text-primary">Stream</span>
-        </span>
-      )}
+      {!compact && <span className="font-display whitespace-nowrap text-[16px] font-bold leading-none">Codenteq Stream</span>}
     </Link>
   );
 }

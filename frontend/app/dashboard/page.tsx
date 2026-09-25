@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CalendarClock, ChevronDown, Copy, MoreHorizontal, Pencil, Plus, Radio, Trash2, Video, Check } from 'lucide-react';
+import { ChevronDown, Copy, MoreHorizontal, Pencil, Plus, Radio, Trash2, Video, Check } from 'lucide-react';
 import { PageHeader } from '@/components/app/AppShell';
 import { BroadcastDialog, type BroadcastKind } from '@/components/app/BroadcastDialog';
 import { Button } from '@/components/ui/button';
@@ -36,31 +36,43 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+/** Yayın durumları, stüdyodaki tally ışıklarının diliyle */
 function StatusBadge({ b }: { b: Broadcast }) {
-  if (b.status === 'live')
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-live px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-        <span className="h-1.5 w-1.5 animate-live-pulse rounded-full bg-white" /> Canlı
-      </span>
-    );
-  if (b.status === 'scheduled')
-    return <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-foreground">Planlandı</span>;
-  if (b.status === 'ended') return <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">Sona erdi</span>;
-  return <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">Taslak</span>;
+  const map = {
+    live: { label: 'Canlı', dot: 'bg-live animate-live-pulse', text: 'text-live' },
+    scheduled: { label: 'Planlandı', dot: 'bg-cue', text: 'text-cue' },
+    ended: { label: 'Sona erdi', dot: 'bg-muted-foreground/40', text: 'text-muted-foreground' },
+    draft: { label: 'Taslak', dot: 'bg-muted-foreground/40', text: 'text-muted-foreground' },
+  } as const;
+  const s = map[b.status] || map.draft;
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${s.text}`}>
+      <span className={`h-2 w-2 rounded-full ${s.dot}`} />
+      {s.label}
+    </span>
+  );
 }
 
+/** Küçük önizleme: yayının kendi marka rengi, alt bandı ve logosu */
 function Thumbnail({ b }: { b: Broadcast }) {
-  const color = b.brand_color || '#1d6cf0';
+  const color = b.brand_color || '#2446D8';
   return (
-    <div
-      className="relative flex aspect-video w-full shrink-0 items-center justify-center overflow-hidden rounded-lg sm:w-44"
-      style={{ background: `linear-gradient(135deg, ${color}, #0f172a)` }}
-    >
+    <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-md bg-bezel sm:w-40" style={{ backgroundImage: `linear-gradient(135deg, ${color}55, transparent 70%)` }}>
+      <div className="absolute inset-[7%] bottom-[30%] grid grid-cols-2 gap-[4%]">
+        <span className="rounded-[3px] bg-white/10" />
+        <span className="rounded-[3px] bg-white/10" />
+      </div>
+      <span
+        className="font-display absolute bottom-[9%] left-[7%] max-w-[80%] truncate px-1.5 py-0.5 text-[9px] font-bold leading-tight text-white"
+        style={{ backgroundColor: color }}
+      >
+        {b.title}
+      </span>
       {b.logo_url && b.show_logo ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={b.logo_url} alt="" className="absolute right-2 top-2 h-6 w-auto max-w-[40%] object-contain" />
+        <img src={b.logo_url} alt="" className="absolute right-[5%] top-[6%] h-[16%] w-auto max-w-[30%] object-contain" />
       ) : null}
-      {b.targets.length > 0 ? <Radio className="h-7 w-7 text-white/80" /> : <Video className="h-7 w-7 text-white/80" />}
+      {b.status === 'live' && <span className="absolute left-[5%] top-[6%] rounded-[2px] bg-live px-1 text-[8px] font-bold text-white">CANLI</span>}
     </div>
   );
 }
@@ -129,20 +141,20 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 md:px-8">
+    <div className="mx-auto max-w-5xl px-4 py-8 md:px-10 md:py-10">
       <PageHeader
         title="Yayınlar"
         description="Canlı yayınlarınızı ve kayıtlarınızı buradan oluşturun ve yönetin."
         actions={
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="lg" className="gap-2 rounded-lg px-5 shadow-sm">
+              <Button size="lg" className="gap-2 px-5">
                 <Plus className="h-4 w-4" /> Oluştur <ChevronDown className="h-4 w-4 opacity-80" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64 p-1.5">
               <DropdownMenuItem className="items-start gap-3 py-2.5" onSelect={() => openCreate('live')}>
-                <span className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-accent text-primary">
+                <span className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-live/10 text-live">
                   <Radio className="h-4 w-4" />
                 </span>
                 <span>
@@ -167,19 +179,20 @@ export default function DashboardPage() {
       <div className="mb-4 flex gap-6 border-b">
         {(
           [
-            ['upcoming', `Yaklaşan (${upcoming.length})`],
-            ['past', `Geçmiş (${past.length})`],
-          ] as [Tab, string][]
-        ).map(([id, label]) => (
+            ['upcoming', 'Yaklaşan', upcoming.length],
+            ['past', 'Geçmiş', past.length],
+          ] as [Tab, string, number][]
+        ).map(([id, label, count]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
             className={cn(
-              '-mb-px border-b-2 pb-3 text-sm font-medium transition-colors',
-              tab === id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
+              '-mb-px flex items-center gap-2 border-b-2 pb-3 text-sm font-semibold transition-colors',
+              tab === id ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
             )}
           >
             {label}
+            <span className="tabular rounded-full bg-muted px-1.5 text-xs font-medium text-muted-foreground">{count}</span>
           </button>
         ))}
       </div>
@@ -189,62 +202,64 @@ export default function DashboardPage() {
       {loading ? (
         <div className="space-y-3">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-28 animate-pulse rounded-xl bg-background" />
+            <div key={i} className="h-24 animate-pulse rounded-lg bg-background" />
           ))}
         </div>
       ) : list.length === 0 ? (
-        <div className="flex flex-col items-center rounded-2xl border border-dashed bg-background px-6 py-16 text-center">
-          <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-primary">
-            {tab === 'upcoming' ? <Radio className="h-6 w-6" /> : <CalendarClock className="h-6 w-6" />}
-          </span>
-          <h3 className="text-lg font-semibold">{tab === 'upcoming' ? 'Henüz yaklaşan yayın yok' : 'Geçmiş yayın yok'}</h3>
-          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            {tab === 'upcoming'
-              ? 'İlk canlı yayınınızı oluşturun, misafirlerinizi davet edin ve birden fazla platformda aynı anda yayına geçin.'
-              : 'Sona eren yayınlarınız burada listelenir.'}
-          </p>
-          {tab === 'upcoming' && (
-            <Button className="mt-6 gap-2" onClick={() => openCreate('live')}>
-              <Plus className="h-4 w-4" /> Canlı yayın oluştur
-            </Button>
-          )}
+        <div className="rounded-xl border bg-background px-6 py-14">
+          <div className="mx-auto max-w-md text-center">
+            <h3 className="font-display text-xl font-bold">{tab === 'upcoming' ? 'Sıradaki yayınınızı oluşturun' : 'Henüz sona eren yayın yok'}</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {tab === 'upcoming'
+                ? 'Hedeflerinizi seçin, başlık verin ve stüdyoya girin. Misafirlerinizi stüdyodan davet edebilirsiniz.'
+                : 'Yayını bitirdiğinizde burada listelenir.'}
+            </p>
+            {tab === 'upcoming' && (
+              <Button className="mt-6 gap-2" onClick={() => openCreate('live')}>
+                <Plus className="h-4 w-4" /> Canlı yayın oluştur
+              </Button>
+            )}
+          </div>
         </div>
       ) : (
-        <ul className="space-y-3">
+        <ul className="divide-y overflow-hidden rounded-xl border bg-background">
           {list.map((b) => (
-            <li key={b.id} className="flex flex-col gap-4 rounded-xl border bg-background p-3 transition hover:shadow-md sm:flex-row sm:items-center">
+            <li key={b.id} className="flex flex-col gap-4 p-4 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center">
               <Thumbnail b={b} />
               <div className="min-w-0 flex-1">
-                <div className="mb-1 flex items-center gap-2">
+                <h3 className="truncate text-[15px] font-semibold">{b.title}</h3>
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                   <StatusBadge b={b} />
+                  <span>
+                    {b.status === 'scheduled' && b.scheduled_at
+                      ? formatDate(b.scheduled_at)
+                      : b.status === 'ended' && b.ended_at
+                        ? `Bitiş ${formatDate(b.ended_at)}`
+                        : `Oluşturuldu ${formatDate(b.created_at)}`}
+                  </span>
                 </div>
-                <h3 className="truncate text-base font-semibold">{b.title}</h3>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {b.status === 'scheduled' && b.scheduled_at
-                    ? `Planlanan: ${formatDate(b.scheduled_at)}`
-                    : b.status === 'ended' && b.ended_at
-                      ? `Bitiş: ${formatDate(b.ended_at)}`
-                      : `Oluşturulma: ${formatDate(b.created_at)}`}
-                </p>
-                <div className="mt-2 flex items-center">
+                <div className="mt-2.5 flex items-center gap-2">
                   {b.targets.length === 0 ? (
-                    <span className="text-xs text-muted-foreground">Hedef yok · yalnızca kayıt</span>
+                    <span className="text-xs text-muted-foreground">Hedef seçilmedi, yalnızca kayıt</span>
                   ) : (
-                    <div className="flex -space-x-2">
-                      {b.targets.slice(0, 6).map((t) => (
-                        <PlatformAvatar key={t.id} platform={t.platform} size={24} ring />
-                      ))}
-                    </div>
+                    <>
+                      <div className="flex -space-x-1.5">
+                        {b.targets.slice(0, 6).map((t) => (
+                          <PlatformAvatar key={t.id} platform={t.platform} size={22} ring />
+                        ))}
+                      </div>
+                      <span className="text-xs text-muted-foreground">{b.targets.length} hedef</span>
+                    </>
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2 sm:pr-1">
-                <Button asChild className="flex-1 sm:flex-none">
-                  <Link href={`/studio/${b.studio_code}`}>Stüdyoya gir</Link>
+              <div className="flex items-center gap-1 sm:pl-2">
+                <Button asChild variant={b.status === 'live' ? 'default' : 'outline'} className="flex-1 sm:flex-none">
+                  <Link href={`/studio/${b.studio_code}`}>{b.status === 'live' ? 'Stüdyoya dön' : 'Stüdyoya gir'}</Link>
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" aria-label="Diğer">
+                    <Button variant="ghost" size="icon" aria-label="Diğer işlemler">
                       <MoreHorizontal className="h-5 w-5" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -253,7 +268,7 @@ export default function DashboardPage() {
                       <Pencil /> Düzenle
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => copyInvite(b)}>
-                      {copiedId === b.id ? <Check /> : <Copy />} Misafir davet linki
+                      {copiedId === b.id ? <Check /> : <Copy />} {copiedId === b.id ? 'Link kopyalandı' : 'Misafir linkini kopyala'}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem destructive onSelect={() => setDeleting(b)}>

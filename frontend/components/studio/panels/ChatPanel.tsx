@@ -39,7 +39,8 @@ export function ChatPanel({ messages, localIdentity, onSend }: { messages: ChatM
               <UserAvatar name={m.name} size={26} className="mt-0.5" />
               <div className={cn('max-w-[80%]', mine && 'text-right')}>
                 <p className="text-[11px] text-muted-foreground">
-                  {mine ? 'Siz' : m.name} · {new Date(m.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                  <span className="font-semibold text-foreground">{mine ? 'Siz' : m.name}</span>
+                  <span className="tabular ml-1.5">{new Date(m.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
                 </p>
                 <p
                   className={cn(

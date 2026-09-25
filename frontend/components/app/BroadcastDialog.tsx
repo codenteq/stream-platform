@@ -104,7 +104,7 @@ export function BroadcastDialog({ open, onOpenChange, kind = 'live', broadcast, 
                   {isRecording ? <Video className="h-5 w-5" /> : <Radio className="h-5 w-5" />}
                 </span>
                 <div>
-                  <DialogTitle className="text-xl">{heading}</DialogTitle>
+                  <DialogTitle>{heading}</DialogTitle>
                   <DialogDescription>
                     {isRecording
                       ? 'Yayına çıkmadan stüdyoda kayıt alın; kayıt bilgisayarınıza indirilir.'

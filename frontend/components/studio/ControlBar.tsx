@@ -1,7 +1,7 @@
 'use client';
 
-import { useTrackToggle } from '@livekit/components-react';
-import { Track } from 'livekit-client';
+import { useLocalParticipant, useTrackToggle, useTrackVolume } from '@livekit/components-react';
+import { Track, type LocalAudioTrack } from 'livekit-client';
 import { Camera, CameraOff, LogOut, Mic, MicOff, MonitorUp, MonitorX, Settings, UserPlus } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -25,22 +25,33 @@ function ControlButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="group flex w-[72px] flex-col items-center gap-1 text-[11px] font-medium text-muted-foreground disabled:opacity-50"
+      className="group flex w-[76px] flex-col items-center gap-1.5 rounded-xl py-1 text-[11px] font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
     >
       <span
         className={cn(
-          'flex h-11 w-11 items-center justify-center rounded-full transition',
+          'relative flex h-11 w-11 items-center justify-center rounded-full transition-colors',
           danger
-            ? 'bg-destructive/10 text-destructive group-hover:bg-destructive group-hover:text-white'
+            ? 'text-destructive group-hover:bg-destructive group-hover:text-white'
             : active
-              ? 'bg-background text-foreground shadow-sm ring-1 ring-border group-hover:bg-secondary'
-              : 'bg-destructive text-white shadow-sm group-hover:bg-destructive/90'
+              ? 'bg-muted text-foreground group-hover:bg-border'
+              : 'bg-destructive text-white group-hover:bg-destructive/90'
         )}
       >
         {children}
       </span>
       <span className="whitespace-nowrap">{label}</span>
     </button>
+  );
+}
+
+/** Mikrofon düğmesinin içindeki küçük VU göstergesi */
+function MicLevel({ track }: { track?: LocalAudioTrack }) {
+  const volume = useTrackVolume(track);
+  const level = Math.min(1, volume * 3);
+  return (
+    <span className="absolute bottom-[7px] left-1/2 flex h-[3px] w-5 -translate-x-1/2 overflow-hidden rounded-full bg-foreground/10" aria-hidden>
+      <span className="h-full rounded-full bg-success transition-[width] duration-75" style={{ width: `${level * 100}%` }} />
+    </span>
   );
 }
 
@@ -56,6 +67,7 @@ export function ControlBar({ onOpenSettings, onInvite, onLeave }: ControlBarProp
     else toast.error(`Cihaz başlatılamadı: ${err.message}`);
   };
   const mic = useTrackToggle({ source: Track.Source.Microphone, onDeviceError });
+  const { microphoneTrack } = useLocalParticipant();
   const cam = useTrackToggle({ source: Track.Source.Camera, onDeviceError });
   const screen = useTrackToggle({
     source: Track.Source.ScreenShare,
@@ -67,9 +79,10 @@ export function ControlBar({ onOpenSettings, onInvite, onLeave }: ControlBarProp
   });
 
   return (
-    <div className="flex items-start justify-center gap-1 sm:gap-2">
+    <div className="flex items-start justify-center gap-0.5 rounded-2xl border bg-background px-2 py-2 shadow-sm sm:gap-1">
       <ControlButton label={mic.enabled ? 'Sesi kapat' : 'Sesi aç'} active={mic.enabled} onClick={() => mic.toggle()} disabled={mic.pending}>
-        {mic.enabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+        {mic.enabled ? <Mic className="-mt-1 h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+        {mic.enabled && <MicLevel track={microphoneTrack?.track as LocalAudioTrack | undefined} />}
       </ControlButton>
       <ControlButton label={cam.enabled ? 'Kamerayı kapat' : 'Kamerayı aç'} active={cam.enabled} onClick={() => cam.toggle()} disabled={cam.pending}>
         {cam.enabled ? <Camera className="h-5 w-5" /> : <CameraOff className="h-5 w-5" />}
@@ -83,7 +96,7 @@ export function ControlBar({ onOpenSettings, onInvite, onLeave }: ControlBarProp
       <ControlButton label="Davet et" onClick={onInvite}>
         <UserPlus className="h-5 w-5" />
       </ControlButton>
-      <div className="mx-1 mt-2 h-8 w-px bg-border" />
+      <div className="mx-1 mt-2 h-8 w-px self-start bg-border" />
       <ControlButton label="Stüdyodan çık" danger onClick={onLeave}>
         <LogOut className="h-5 w-5" />
       </ControlButton>

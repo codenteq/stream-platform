@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { MoreHorizontal, Pencil, Plus, Radio, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/app/AppShell';
 import { DestinationDialog } from '@/components/app/DestinationDialog';
 import { Button } from '@/components/ui/button';
@@ -60,14 +60,14 @@ export default function DestinationsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 md:px-8">
+    <div className="mx-auto max-w-5xl px-4 py-8 md:px-10 md:py-10">
       <PageHeader
         title="Hedefler"
         description="Yayın yapacağınız kanalları bağlayın. Her yayında hangi hedeflere çıkacağınızı seçebilirsiniz."
         actions={
           <Button
             size="lg"
-            className="gap-2 rounded-lg"
+            className="gap-2"
             onClick={() => {
               setEditing(null);
               setDialogOpen(true);
@@ -87,27 +87,30 @@ export default function DestinationsPage() {
           ))}
         </div>
       ) : destinations.length === 0 ? (
-        <div className="flex flex-col items-center rounded-2xl border border-dashed bg-background px-6 py-16 text-center">
-          <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-primary">
-            <Radio className="h-6 w-6" />
-          </span>
-          <h3 className="text-lg font-semibold">Henüz hedef bağlamadınız</h3>
-          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            YouTube, Facebook, LinkedIn, Twitch, X, Kick veya özel bir RTMP sunucusu ekleyin ve aynı anda hepsine yayın yapın.
-          </p>
-          <Button className="mt-6 gap-2" onClick={() => setDialogOpen(true)}>
-            <Plus className="h-4 w-4" /> Hedef ekle
-          </Button>
+        <div className="rounded-xl border bg-background px-6 py-12">
+          <div className="mx-auto max-w-md text-center">
+            <div className="mb-5 flex justify-center -space-x-2">
+              {['YouTube', 'Facebook', 'LinkedIn', 'Twitch', 'X', 'Kick'].map((p) => (
+                <PlatformAvatar key={p} platform={p} size={36} ring />
+              ))}
+            </div>
+            <h3 className="font-display text-xl font-bold">İlk hedefinizi bağlayın</h3>
+            <p className="mt-2 text-sm text-muted-foreground">Bir hedef ekledikten sonra her yayında hangi platformlara çıkacağınızı seçebilirsiniz.</p>
+            <Button className="mt-6 gap-2" onClick={() => setDialogOpen(true)}>
+              <Plus className="h-4 w-4" /> Hedef ekle
+            </Button>
+          </div>
         </div>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
+        <ul className="divide-y overflow-hidden rounded-xl border bg-background">
           {destinations.map((d) => (
-            <li key={d.id} className="flex items-center gap-4 rounded-xl border bg-background p-4">
+            <li key={d.id} className="flex items-center gap-4 px-4 py-3.5">
               <PlatformAvatar platform={d.platform} size={44} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{d.name}</p>
+                <p className="truncate text-[15px] font-semibold">{d.name}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {getPlatform(d.platform).label} · {maskKey(d.stream_key)}
+                  {getPlatform(d.platform).label}
+                  <span className="tabular ml-3 tracking-wider">{maskKey(d.stream_key)}</span>
                 </p>
               </div>
               <DropdownMenu>

@@ -29,7 +29,7 @@ export const THEMES: { id: BrandTheme; label: string }[] = [
   { id: 'bold', label: 'Kalın' },
 ];
 
-export const BRAND_COLORS = ['#1d6cf0', '#0f172a', '#e11d48', '#ea580c', '#f59e0b', '#16a34a', '#0891b2', '#7c3aed', '#db2777', '#ffffff'];
+export const BRAND_COLORS = ['#2446d8', '#0f172a', '#e11d48', '#ea580c', '#f59e0b', '#16a34a', '#0891b2', '#7c3aed', '#db2777', '#ffffff'];
 
 export interface Banner {
   id: string;
@@ -49,7 +49,7 @@ export interface BrandConfig {
 }
 
 export const DEFAULT_BRAND: BrandConfig = {
-  color: '#1d6cf0',
+  color: '#2446d8',
   theme: 'default',
   showNames: true,
   logoUrl: '',

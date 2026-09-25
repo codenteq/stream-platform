@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useBitrateStats } from '@/hooks/useBitrateStats';
 import { BitrateGraph } from './BitrateGraph';
-import { Wifi, WifiOff, Activity, HardDrive, BarChart3, ChevronDown, ChevronUp } from 'lucide-react';
+import { Wifi, WifiOff, Activity, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface BitrateIndicatorProps {
     targetBitrate: number;
@@ -32,8 +32,8 @@ export function BitrateIndicator({ targetBitrate, isLive }: BitrateIndicatorProp
     const getStatus = () => {
         if (percentage >= 80) {
             return {
-                color: 'text-emerald-600',
-                bgColor: 'bg-green-500',
+                color: 'text-success',
+                bgColor: 'bg-success',
                 borderColor: 'border-green-500/30',
                 label: 'Mükemmel',
                 Icon: Wifi,
@@ -41,16 +41,16 @@ export function BitrateIndicator({ targetBitrate, isLive }: BitrateIndicatorProp
         }
         if (percentage >= 50) {
             return {
-                color: 'text-amber-600',
-                bgColor: 'bg-yellow-500',
+                color: 'text-cue',
+                bgColor: 'bg-cue',
                 borderColor: 'border-yellow-500/30',
                 label: 'Orta',
                 Icon: Wifi,
             };
         }
         return {
-            color: 'text-red-600',
-            bgColor: 'bg-red-500',
+            color: 'text-live',
+            bgColor: 'bg-live',
             borderColor: 'border-red-500/30',
             label: 'Düşük',
             Icon: WifiOff,
@@ -87,42 +87,17 @@ export function BitrateIndicator({ targetBitrate, isLive }: BitrateIndicatorProp
 
                 <StatusIcon className={`w-4 h-4 ${status.color}`} />
 
-                {/* Bitrate values */}
-                <div className="flex items-baseline gap-1">
-                    <span className={`text-sm font-medium ${status.color}`}>
-                        {formatBitrate(currentBitrate)}
-                    </span>
-                    <span className="text-xs text-muted-foreground">/</span>
-                    <span className="text-xs text-muted-foreground">
-                        {formatBitrate(targetBitrate)}
-                    </span>
-                </div>
-
-                {/* Data usage */}
-                <div className="flex items-center gap-1 text-xs text-muted-foreground border-l border-border pl-2">
-                    <HardDrive className="w-3 h-3" />
-                    <span>~{calculateDataUsage(totalBitrate)} GB/sa</span>
-                </div>
-
-                {/* Graph toggle */}
-                <div className="flex items-center gap-1 text-xs text-muted-foreground border-l border-border pl-2">
-                    <BarChart3 className="w-3 h-3" />
-                    {showGraph ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                </div>
-
-                {/* Status label */}
-                <span className={`text-xs px-1.5 py-0.5 rounded ${status.bgColor}/20 ${status.color}`}>
-                    {status.label}
-                </span>
+                <span className={`tabular text-sm font-semibold ${status.color}`}>{formatBitrate(currentBitrate)}</span>
+                {showGraph ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
             </div>
 
             {/* Expandable Graph */}
             {showGraph && stats.history && (
                 <div className="absolute top-full right-0 mt-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="bg-gray-900/95 backdrop-blur-sm rounded-lg border border-gray-700 p-2 shadow-xl">
-                        <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                            <BarChart3 className="w-3 h-3" />
-                            <span>Son 5 dakika</span>
+                    <div className="w-[252px] rounded-lg bg-bezel p-3 text-white shadow-xl">
+                        <div className="mb-2 flex items-baseline justify-between">
+                            <span className={`text-xs font-semibold ${status.color}`}>Bağlantı: {status.label.toLocaleLowerCase('tr-TR')}</span>
+                            <span className="tabular text-[11px] text-white/60">Hedef {formatBitrate(targetBitrate)}</span>
                         </div>
                         <BitrateGraph
                             history={stats.history}
@@ -130,10 +105,18 @@ export function BitrateIndicator({ targetBitrate, isLive }: BitrateIndicatorProp
                             width={220}
                             height={70}
                         />
-                        <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
-                            <span>5dk önce</span>
+                        <div className="mt-1 flex justify-between text-[10px] text-white/50">
+                            <span>5 dk önce</span>
                             <span>Şimdi</span>
                         </div>
+                        <dl className="mt-2 grid grid-cols-2 gap-y-1 border-t border-white/10 pt-2 text-[11px]">
+                            <dt className="text-white/60">Görüntü</dt>
+                            <dd className="tabular text-right">{formatBitrate(currentBitrate)}</dd>
+                            <dt className="text-white/60">Ses</dt>
+                            <dd className="tabular text-right">{formatBitrate(stats.outboundAudioBitrate)}</dd>
+                            <dt className="text-white/60">Veri kullanımı</dt>
+                            <dd className="tabular text-right">~{calculateDataUsage(totalBitrate)} GB/saat</dd>
+                        </dl>
                     </div>
                 </div>
             )}

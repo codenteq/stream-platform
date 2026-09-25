@@ -3,81 +3,50 @@
 @tailwind utilities;
 
 @layer base {
-  /* Açık tema: beyaz yüzeyler, gri zemin, mavi vurgu */
+  /*
+   * Yayın stüdyosu paleti: soğuk stüdyo grisi zemin, lacivert mürekkep,
+   * eylemler için kobalt. Tally kırmızısı yalnızca "yayında" durumları için,
+   * kehribar planlanmış/beklemede durumları için kullanılır.
+   */
   :root {
     --background: 0 0% 100%;
-    --foreground: 220 18% 14%;
+    --foreground: 219 47% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 18% 14%;
+    --card-foreground: 219 47% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 18% 14%;
+    --popover-foreground: 219 47% 12%;
 
-    --primary: 217 88% 53%;
+    --primary: 229 71% 49%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 14% 95%;
-    --secondary-foreground: 220 18% 14%;
+    --secondary: 220 27% 96%;
+    --secondary-foreground: 219 47% 12%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 44%;
+    --muted: 220 20% 94%;
+    --muted-foreground: 220 14% 42%;
 
-    --accent: 217 90% 96%;
-    --accent-foreground: 217 88% 40%;
+    --accent: 228 81% 95%;
+    --accent-foreground: 229 72% 38%;
 
-    --destructive: 0 78% 54%;
+    --destructive: 2 77% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 142.1 70% 38%;
+    --success: 152 64% 34%;
     --success-foreground: 0 0% 100%;
 
-    --live: 0 84% 55%;
+    --live: 2 77% 51%;
+    --cue: 38 100% 43%;
 
-    --border: 220 13% 89%;
-    --input: 220 13% 86%;
-    --ring: 217 88% 53%;
+    --border: 220 21% 89%;
+    --input: 220 18% 84%;
+    --ring: 229 71% 49%;
 
-    --studio: 220 16% 94%;
+    --studio: 218 18% 92%;
+    --bezel: 219 48% 9%;
 
-    --radius: 0.625rem;
-  }
-
-  .dark {
-    --background: 222 20% 9%;
-    --foreground: 210 20% 96%;
-
-    --card: 222 18% 12%;
-    --card-foreground: 210 20% 96%;
-
-    --popover: 222 18% 12%;
-    --popover-foreground: 210 20% 96%;
-
-    --primary: 217 88% 58%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 222 14% 18%;
-    --secondary-foreground: 210 20% 96%;
-
-    --muted: 222 14% 16%;
-    --muted-foreground: 220 9% 65%;
-
-    --accent: 217 40% 20%;
-    --accent-foreground: 210 20% 96%;
-
-    --destructive: 0 72% 50%;
-    --destructive-foreground: 0 0% 100%;
-
-    --success: 142.1 70.2% 40.3%;
-    --success-foreground: 0 0% 100%;
-
-    --live: 0 84% 58%;
-
-    --border: 222 14% 20%;
-    --input: 222 14% 24%;
-    --ring: 217 88% 58%;
-
-    --studio: 222 20% 7%;
+    --radius: 0.5rem;
   }
 }
 
@@ -86,12 +55,39 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01" 0;
+  }
+  h1, h2, h3 {
+    text-wrap: balance;
   }
 }
 
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
+  }
+  /* Archivo'nun geniş kesimi: başlıklar ve yayın grafikleri için */
+  .font-display {
+    font-stretch: 118%;
+    font-variation-settings: "wdth" 118;
+    letter-spacing: -0.02em;
+  }
+  .font-wide {
+    font-stretch: 125%;
+    font-variation-settings: "wdth" 125;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

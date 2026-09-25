@@ -60,20 +60,32 @@ export function StudioHeader(props: StudioHeaderProps) {
         <LogoMark className="h-7 w-7" />
       )}
       <div className="min-w-0 flex-1">
-        <h1 className="truncate text-sm font-semibold sm:text-base">{title}</h1>
+        <h1 className="font-display truncate text-[15px] font-bold sm:text-base">{title}</h1>
       </div>
 
-      {isLive && (
-        <span className="flex items-center gap-2 rounded-md bg-live px-2.5 py-1 text-xs font-bold text-white">
+      {isLive && (isHost || !guestOnStage) && (
+        <span className="flex items-center gap-2 rounded-md bg-live px-2.5 py-1 text-xs font-bold text-white shadow-[0_0_14px_hsl(var(--live)/0.45)]">
           <span className="h-2 w-2 animate-live-pulse rounded-full bg-white" />
           CANLI
-          {isHost && <span className="font-mono font-semibold tabular-nums">{liveTime}</span>}
+          {isHost && <span className="tabular font-semibold">{liveTime}</span>}
         </span>
       )}
 
       {!isHost && (
-        <span className={cn('rounded-md px-2.5 py-1 text-xs font-semibold', guestOnStage ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground')}>
-          {guestOnStage ? 'Sahnedesiniz' : 'Kulistesiniz'}
+        <span
+          className={cn(
+            'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold',
+            guestOnStage
+              ? isLive
+                ? 'bg-live font-bold text-white shadow-[0_0_14px_hsl(var(--live)/0.45)]'
+                : 'bg-accent text-accent-foreground'
+              : 'bg-muted text-muted-foreground'
+          )}
+        >
+          <span
+            className={cn('h-2 w-2 rounded-full', guestOnStage ? (isLive ? 'animate-live-pulse bg-white' : 'bg-primary') : 'bg-muted-foreground/50')}
+          />
+          {guestOnStage ? (isLive ? 'Yayındasınız' : 'Sahnedesiniz') : 'Kulistesiniz'}
         </span>
       )}
 
@@ -88,9 +100,9 @@ export function StudioHeader(props: StudioHeaderProps) {
             </div>
           )}
           {canRecord && (
-            <Button variant="outline" size="sm" onClick={onToggleRecording} className={cn('gap-2', isRecording && 'border-live text-live hover:text-live')}>
-              {isRecording ? <Square className="h-3.5 w-3.5 fill-current" /> : <Circle className="h-3.5 w-3.5 fill-live text-live" />}
-              {isRecording ? <span className="font-mono tabular-nums">{recTime}</span> : 'Kaydet'}
+            <Button variant="outline" size="sm" onClick={onToggleRecording} className={cn('gap-2', isRecording && 'border-live/50 text-live hover:text-live')}>
+              {isRecording ? <Square className="h-3 w-3 fill-current" /> : <Circle className="h-3 w-3 fill-live text-live" />}
+              {isRecording ? <span className="tabular">{recTime}</span> : 'Kaydet'}
             </Button>
           )}
           {isLive ? (

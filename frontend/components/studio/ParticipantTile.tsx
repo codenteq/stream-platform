@@ -20,6 +20,7 @@ interface ParticipantTileProps {
   source: StageSource;
   onStage: boolean;
   isMain?: boolean;
+  isLive?: boolean;
   canManage: boolean;
   onToggleStage?: () => void;
   onMakeMain?: () => void;
@@ -28,7 +29,7 @@ interface ParticipantTileProps {
 }
 
 /** Kulis şeridindeki katılımcı kutucuğu. Üzerine gelince "Sahneye ekle / Kaldır" gösterir. */
-export function ParticipantTile({ participant, source, onStage, isMain, canManage, onToggleStage, onMakeMain, onMute, onRemove }: ParticipantTileProps) {
+export function ParticipantTile({ participant, source, onStage, isMain, isLive, canManage, onToggleStage, onMakeMain, onMute, onRemove }: ParticipantTileProps) {
   const lkSource = source === 'screen' ? Track.Source.ScreenShare : Track.Source.Camera;
   const pub = participant.getTrackPublication(lkSource);
   const camMuted = useIsMuted({ participant, source: lkSource, publication: pub } as any);
@@ -42,8 +43,8 @@ export function ParticipantTile({ participant, source, onStage, isMain, canManag
     <div className="group w-[168px] shrink-0">
       <div
         className={cn(
-          'relative aspect-video overflow-hidden rounded-lg bg-slate-800 ring-2 transition',
-          onStage ? 'ring-primary' : speaking && source === 'camera' ? 'ring-emerald-400' : 'ring-transparent'
+          'relative aspect-video overflow-hidden rounded-md bg-bezel ring-2 ring-offset-2 ring-offset-studio transition',
+          onStage ? (isLive ? 'ring-live' : 'ring-primary') : speaking && source === 'camera' ? 'ring-success' : 'ring-transparent'
         )}
       >
         {showVideo ? (
@@ -58,8 +59,9 @@ export function ParticipantTile({ participant, source, onStage, isMain, canManag
         )}
 
         {onStage && (
-          <span className="absolute left-1.5 top-1.5 rounded bg-primary px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground">
-            {isMain ? 'Ana' : 'Sahnede'}
+          <span className={cn('absolute left-1.5 top-1.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold text-white', isLive ? 'bg-live' : 'bg-primary')}>
+            {isMain && <Star className="h-2.5 w-2.5 fill-current" aria-label="Ana görüntü" />}
+            {isLive ? 'Yayında' : 'Sahnede'}
           </span>
         )}
         {source === 'camera' && hasMic && micMuted && (
@@ -79,7 +81,7 @@ export function ParticipantTile({ participant, source, onStage, isMain, canManag
 
       <div className="mt-1.5 flex items-center gap-1">
         <p className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
-          {source === 'screen' ? `${name} · Ekran` : name}
+          {source === 'screen' ? `${name} ekranı` : name}
           {participant.isLocal && <span className="text-muted-foreground"> (Siz)</span>}
         </p>
         {canManage && (onMakeMain || onMute || onRemove) && (

@@ -42,11 +42,11 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 md:px-8">
+    <div className="mx-auto max-w-3xl px-4 py-8 md:px-10 md:py-10">
       <PageHeader title="Ayarlar" description="Hesap bilgilerinizi yönetin." />
 
       <form onSubmit={save} className="rounded-xl border bg-background p-6">
-        <h2 className="text-base font-semibold">Profil</h2>
+        <h2 className="font-display text-lg font-bold">Profil</h2>
         <p className="mb-6 text-sm text-muted-foreground">Görünen adınız stüdyoda ve misafirlerinize varsayılan olarak gösterilir.</p>
 
         <div className="mb-6 flex items-center gap-4">

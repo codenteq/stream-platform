@@ -16,6 +16,9 @@ module.exports = {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["var(--font-archivo)", "Segoe UI", "system-ui", "sans-serif"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -39,6 +42,8 @@ module.exports = {
           foreground: "hsl(var(--success-foreground))",
         },
         live: "hsl(var(--live))",
+        cue: "hsl(var(--cue))",
+        bezel: "hsl(var(--bezel))",
         studio: "hsl(var(--studio))",
         muted: {
           DEFAULT: "hsl(var(--muted))",

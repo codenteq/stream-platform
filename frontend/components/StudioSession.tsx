@@ -609,8 +609,15 @@ function StudioContent({
       <div className="relative flex min-h-0 flex-1">
         <main className="flex min-w-0 flex-1 flex-col items-center overflow-y-auto px-3 pb-4 pt-4 sm:px-6 scrollbar-thin">
           {/* Sahne */}
-          <div className="w-full" style={{ maxWidth: 'min(1120px, calc((100vh - 330px) * 16 / 9))', minWidth: 'min(100%, 480px)' }}>
-            <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-slate-900 shadow-lg ring-1 ring-black/5">
+          <div className="w-full" style={{ maxWidth: 'min(1120px, calc((100vh - 430px) * 16 / 9))', minWidth: 'min(100%, 480px)' }}>
+            {/* Program monitörü: yayındayken çerçeve tally kırmızısına döner */}
+            <div
+              className={cn(
+                'rounded-xl bg-bezel p-1.5 shadow-[0_18px_50px_-18px_rgba(16,26,44,0.55)] transition-shadow',
+                showLive ? 'ring-2 ring-live shadow-[0_0_0_5px_hsl(var(--live)/0.14),0_18px_50px_-18px_rgba(16,26,44,0.55)]' : 'ring-1 ring-black/5'
+              )}
+            >
+            <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-bezel">
               {isHost ? (
                 <HostStage
                   canvasRef={canvasRef}
@@ -626,35 +633,40 @@ function StudioContent({
               )}
               {isHost && stage.length === 0 && (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                  <p className="rounded-lg bg-black/50 px-4 py-2 text-sm text-white">Sahne boş · Aşağıdan birini sahneye ekleyin</p>
+                  <p className="rounded-lg bg-black/55 px-4 py-2 text-sm text-white">Sahne boş. Aşağıdaki kutucuklardan birini sahneye ekleyin.</p>
                 </div>
               )}
+            </div>
             </div>
 
             {/* Düzenler */}
             {isHost && (
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
-                {LAYOUTS.map((l) => (
-                  <Hint key={l.id} label={l.label}>
-                    <button
-                      onClick={() => setLayout(l.id)}
-                      className={cn(
-                        'flex h-10 w-14 items-center justify-center rounded-lg border bg-background transition',
-                        layout === l.id ? 'border-primary text-primary ring-1 ring-primary' : 'text-muted-foreground hover:border-primary/50 hover:text-foreground'
-                      )}
-                      aria-label={l.label}
-                    >
-                      <LayoutIcon layout={l.id} className="h-6 w-10" />
-                    </button>
-                  </Hint>
-                ))}
+              <div className="mt-3 flex justify-center">
+                <div className="inline-flex flex-wrap justify-center gap-0.5 rounded-xl border bg-background p-1" role="radiogroup" aria-label="Sahne düzeni">
+                  {LAYOUTS.map((l) => (
+                    <Hint key={l.id} label={l.label}>
+                      <button
+                        onClick={() => setLayout(l.id)}
+                        role="radio"
+                        aria-checked={layout === l.id}
+                        className={cn(
+                          'flex h-9 w-12 items-center justify-center rounded-lg transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                          layout === l.id ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        )}
+                        aria-label={l.label}
+                      >
+                        <LayoutIcon layout={l.id} className="h-5 w-9" />
+                      </button>
+                    </Hint>
+                  ))}
+                </div>
               </div>
             )}
           </div>
 
           {/* Kulis */}
-          <div className="mt-5 w-full max-w-[1120px]">
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin sm:justify-center">
+          <div className="mt-4 w-full max-w-[1120px]">
+            <div className="flex gap-3 overflow-x-auto px-1 pb-2 pt-1 scrollbar-thin sm:justify-center">
               {backstage.map(({ participant, source }) => {
                 const onStage = isHost ? isOnStage(participant.identity, source) : !!remoteScene?.stage.some((i) => i.identity === participant.identity && i.source === source);
                 return (
@@ -664,6 +676,7 @@ function StudioContent({
                     source={source}
                     onStage={onStage}
                     isMain={!!mainItem && mainItem.identity === participant.identity && mainItem.source === source}
+                    isLive={showLive}
                     canManage={isHost}
                     onToggleStage={isHost ? () => toggleStage(participant.identity, source) : undefined}
                     onMakeMain={isHost ? () => makeMain(participant.identity, source) : undefined}
@@ -675,7 +688,7 @@ function StudioContent({
             </div>
           </div>
 
-          <div className="mt-auto pt-4">
+          <div className="mt-auto pt-3">
             <ControlBar onOpenSettings={() => setSettingsOpen(true)} onInvite={() => setInviteOpen(true)} onLeave={leave} />
           </div>
         </main>

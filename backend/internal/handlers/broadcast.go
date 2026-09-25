@@ -70,7 +70,7 @@ func CreateBroadcast(c *fiber.Ctx) error {
 		UserID:     userId,
 		StudioCode: uuid.New().String(),
 		Status:     models.BroadcastStatusDraft,
-		BrandColor: "#1d6cf0",
+		BrandColor: "#2446d8",
 		Theme:      "default",
 		ShowNames:  true,
 		Banners:    "[]",

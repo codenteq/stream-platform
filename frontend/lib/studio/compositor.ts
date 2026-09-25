@@ -200,7 +200,25 @@ export function shade(hex: string, amount: number) {
   return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
 }
 
-const FONT = 'Inter, "Segoe UI", system-ui, -apple-system, sans-serif';
+const FALLBACK_FONT = '"Segoe UI", system-ui, -apple-system, sans-serif';
+let cachedFont: string | null = null;
+
+/** Sayfanın Archivo ailesini (next/font'un ürettiği adla) canvas için döndürür. */
+function fontFamily() {
+  if (cachedFont) return cachedFont;
+  if (typeof document === 'undefined') return FALLBACK_FONT;
+  const family = getComputedStyle(document.body).fontFamily || FALLBACK_FONT;
+  cachedFont = family;
+  // Canvas yazı tipini ancak yüklendikten sonra kullanabilir
+  document.fonts?.load(`700 32px ${family}`).catch(() => undefined);
+  return family;
+}
+
+/** Yayın grafikleri için geniş kesim (tarayıcı destekliyorsa) */
+function setStretch(ctx: CanvasRenderingContext2D, value: 'normal' | 'expanded') {
+  const c = ctx as CanvasRenderingContext2D & { fontStretch?: string };
+  if ('fontStretch' in c) c.fontStretch = value;
+}
 
 function tagStyle(theme: BrandTheme, color: string) {
   switch (theme) {
@@ -214,7 +232,7 @@ function tagStyle(theme: BrandTheme, color: string) {
       return { bg: color, fg: readableTextOn(color), radius: 4, weight: 800, upper: false, accent: false };
     case 'default':
     default:
-      return { bg: color, fg: readableTextOn(color), radius: 8, weight: 600, upper: false, accent: false };
+      return { bg: color, fg: readableTextOn(color), radius: 6, weight: 700, upper: false, accent: false };
   }
 }
 
@@ -223,7 +241,8 @@ export function drawNameTag(ctx: CanvasRenderingContext2D, name: string, box: Bo
   const scale = brand.theme === 'bold' ? 1.2 : 1;
   const fs = Math.max(canvasH * 0.017, Math.min(canvasH * 0.03, box.h * 0.065)) * scale;
   const text = s.upper ? name.toUpperCase() : name;
-  ctx.font = `${s.weight} ${fs}px ${FONT}`;
+  ctx.font = `${s.weight} ${fs}px ${fontFamily()}`;
+  setStretch(ctx, 'expanded');
   const padX = fs * 0.7;
   const padY = fs * 0.42;
   const maxW = box.w * 0.8;
@@ -252,6 +271,7 @@ export function drawNameTag(ctx: CanvasRenderingContext2D, name: string, box: Bo
   ctx.fillStyle = s.fg;
   ctx.textBaseline = 'middle';
   ctx.fillText(label, x + accentW + padX, y + h / 2 + fs * 0.04);
+  setStretch(ctx, 'normal');
 }
 
 function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxW: number, maxLines: number) {
@@ -285,7 +305,8 @@ export function drawBanner(ctx: CanvasRenderingContext2D, banner: Banner, brand:
     const fs = h * 0.46;
     ctx.fillStyle = s.bg === 'rgba(15,23,42,0.62)' ? 'rgba(15,23,42,0.85)' : s.bg;
     ctx.fillRect(0, y, W, h);
-    ctx.font = `${s.weight} ${fs}px ${FONT}`;
+    ctx.font = `${s.weight} ${fs}px ${fontFamily()}`;
+    setStretch(ctx, 'expanded');
     ctx.fillStyle = s.fg;
     ctx.textBaseline = 'middle';
     const text = (s.upper ? banner.text.toUpperCase() : banner.text) + '     •     ';
@@ -298,12 +319,14 @@ export function drawBanner(ctx: CanvasRenderingContext2D, banner: Banner, brand:
     ctx.clip();
     for (let x = -offset; x < W; x += tw) ctx.fillText(text, x, y + h / 2);
     ctx.restore();
+    setStretch(ctx, 'normal');
     return;
   }
 
   const scale = brand.theme === 'bold' ? 1.15 : 1;
   const fs = H * 0.04 * scale;
-  ctx.font = `${s.weight} ${fs}px ${FONT}`;
+  ctx.font = `${s.weight} ${fs}px ${fontFamily()}`;
+  setStretch(ctx, 'expanded');
   const maxW = W * 0.84;
   const lines = wrapLines(ctx, s.upper ? banner.text.toUpperCase() : banner.text, maxW, 2);
   const lineH = fs * 1.25;
@@ -330,6 +353,7 @@ export function drawBanner(ctx: CanvasRenderingContext2D, banner: Banner, brand:
   ctx.fillStyle = s.fg;
   ctx.textBaseline = 'middle';
   lines.forEach((l, i) => ctx.fillText(l, x + accentW + padX, y + padY + lineH * i + lineH / 2));
+  setStretch(ctx, 'normal');
 }
 
 export function drawAvatarPlaceholder(ctx: CanvasRenderingContext2D, box: Box, name: string, color: string) {
@@ -345,7 +369,7 @@ export function drawAvatarPlaceholder(ctx: CanvasRenderingContext2D, box: Box, n
   const parts = name.trim().split(/\s+/).filter(Boolean);
   const initials = parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : (parts[0] || '?').slice(0, 2);
   ctx.fillStyle = '#ffffff';
-  ctx.font = `600 ${r * 0.8}px ${FONT}`;
+  ctx.font = `600 ${r * 0.8}px ${fontFamily()}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(initials.toUpperCase(), cx, cy + r * 0.04);

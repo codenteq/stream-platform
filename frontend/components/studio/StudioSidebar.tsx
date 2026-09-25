@@ -26,7 +26,7 @@ export function StudioSidebar({ tabs, active, onChange, unreadChat, children }: 
       {active && (
         <aside className="absolute inset-y-0 right-[76px] z-20 flex w-[min(340px,calc(100vw-92px))] flex-col border-l bg-background shadow-xl lg:static lg:shadow-none">
           <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
-            <h2 className="text-sm font-semibold">{TAB_META[active].label}</h2>
+            <h2 className="font-display text-[15px] font-bold">{TAB_META[active].label}</h2>
             <button onClick={() => onChange(null)} className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label="Paneli kapat">
               <X className="h-4 w-4" />
             </button>
@@ -44,7 +44,7 @@ export function StudioSidebar({ tabs, active, onChange, unreadChat, children }: 
               onClick={() => onChange(isActive ? null : id)}
               className={cn(
                 'relative flex w-[64px] flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] font-medium transition',
-                isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                isActive ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               )}
             >
               <Icon className="h-5 w-5" />

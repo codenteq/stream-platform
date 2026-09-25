@@ -65,7 +65,7 @@ function MicLevel({ stream }: { stream: MediaStream | null }) {
       {Array.from({ length: 10 }).map((_, i) => (
         <span
           key={i}
-          className={cn('w-1 rounded-full transition-colors', level * 10 > i ? 'bg-emerald-500' : 'bg-muted-foreground/25')}
+          className={cn('w-1 rounded-full transition-colors', level * 10 > i ? (i > 7 ? 'bg-cue' : 'bg-success') : 'bg-muted-foreground/25')}
           style={{ height: `${40 + i * 6}%` }}
         />
       ))}
@@ -161,7 +161,7 @@ export function Lobby({ title, hostName, role, defaultName, joining, error, onJo
   const hasVideo = videoEnabled && !!stream?.getVideoTracks().length;
 
   return (
-    <div className="flex min-h-screen flex-col bg-muted/60">
+    <div className="flex min-h-screen flex-col bg-muted">
       <header className="flex h-16 items-center border-b bg-background px-6">
         <Logo compact={false} href={role === 'host' ? '/dashboard' : '/'} />
       </header>
@@ -169,7 +169,7 @@ export function Lobby({ title, hostName, role, defaultName, joining, error, onJo
       <main className="flex flex-1 items-center justify-center p-4 md:p-8">
         <div className="grid w-full max-w-5xl items-center gap-8 md:grid-cols-[1.4fr_1fr]">
           <div>
-            <div className="relative aspect-video overflow-hidden rounded-2xl bg-slate-900 shadow-lg">
+            <div className="relative aspect-video overflow-hidden rounded-xl bg-bezel shadow-[0_18px_50px_-18px_rgba(16,26,44,0.55)] ring-1 ring-black/5">
               <video ref={videoRef} autoPlay playsInline muted className={cn('h-full w-full scale-x-[-1] object-cover', !hasVideo && 'hidden')} />
               {!hasVideo && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-slate-300">
@@ -205,9 +205,9 @@ export function Lobby({ title, hostName, role, defaultName, joining, error, onJo
             {permissionError && <p className="mt-3 rounded-md bg-amber-100 px-3 py-2 text-sm text-amber-900">{permissionError}</p>}
           </div>
 
-          <form onSubmit={join} className="rounded-2xl border bg-background p-6 shadow-sm">
+          <form onSubmit={join} className="rounded-xl border bg-background p-6">
             <p className="text-sm text-muted-foreground">{role === 'host' ? 'Stüdyonuza giriyorsunuz' : `${hostName || 'Yapımcı'} sizi davet etti`}</p>
-            <h1 className="mt-1 text-xl font-bold leading-tight">{title}</h1>
+            <h1 className="font-display mt-1 text-2xl font-bold leading-tight">{title}</h1>
 
             <div className="mt-6 space-y-4">
               <div className="space-y-2">
