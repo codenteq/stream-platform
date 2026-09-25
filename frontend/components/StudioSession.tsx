@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   LiveKitRoom,
   VideoTrack,
@@ -11,7 +11,7 @@ import {
   useTracks,
   type TrackReference,
 } from '@livekit/components-react';
-import { DisconnectReason, LocalVideoTrack, RoomEvent, Track, VideoPresets, type Participant } from 'livekit-client';
+import { ConnectionState, DisconnectReason, LocalVideoTrack, RoomEvent, Track, VideoPresets, type LocalTrackPublication, type Participant } from 'livekit-client';
 import { Loader2, MonitorPlay, Volume2 } from 'lucide-react';
 import { CustomAudioRenderer } from '@/components/CustomAudioRenderer';
 import { StudioHeader } from '@/components/studio/StudioHeader';
@@ -52,6 +52,8 @@ import {
   DEFAULT_BRAND,
   LAYOUTS,
   QUALITY_SIZES,
+  audioDelayFor,
+  effectiveBitrate,
   stageKey,
   type Banner,
   type BrandConfig,
@@ -64,7 +66,7 @@ import {
 } from '@/lib/studio/types';
 import { cn } from '@/lib/utils';
 
-export type LeaveReason = 'left' | 'removed' | 'ended';
+export type LeaveReason = 'left' | 'removed' | 'ended' | 'duplicate' | 'error';
 
 interface StudioSessionProps {
   token: string;
@@ -117,7 +119,7 @@ function StartAudioOverlay() {
 }
 
 /** Kompozitör için tüm kamera ve ekran izlerini görünmez <video> öğelerine bağlar. */
-function HiddenVideos({ videoEls }: { videoEls: React.MutableRefObject<Map<string, HTMLVideoElement>> }) {
+const HiddenVideos = memo(function HiddenVideos({ videoEls }: { videoEls: React.MutableRefObject<Map<string, HTMLVideoElement>> }) {
   const tracks = useTracks([Track.Source.Camera, Track.Source.ScreenShare]);
   return (
     <div aria-hidden style={{ position: 'fixed', left: 0, top: 0, width: 320, height: 180, opacity: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: -1 }}>
@@ -137,7 +139,7 @@ function HiddenVideos({ videoEls }: { videoEls: React.MutableRefObject<Map<strin
       })}
     </div>
   );
-}
+});
 
 interface HostStageProps {
   canvasRef: React.RefObject<HTMLCanvasElement>;
@@ -163,14 +165,19 @@ function HostStage({ canvasRef, stage, layout, brand, banner, settings, onCompos
     if (!canvas || !localParticipant) return;
     const mst = canvas.captureStream(settings.fps).getVideoTracks()[0];
     if (!mst) return;
-    const track = new LocalVideoTrack(mst, undefined, false);
+    // userProvidedTrack=true (varsayılan): LiveKit yeniden bağlanmada bu izi getUserMedia ile yeniden yakalamaya çalışmasın
+    const track = new LocalVideoTrack(mst);
     let cancelled = false;
     const publishing = localParticipant
       .publishTrack(track, {
         name: 'canvas-composite',
-        simulcast: false,
-        videoEncoding: { maxBitrate: settings.videoBitrate * 1000, maxFramerate: settings.fps },
-        degradationPreference: 'maintain-resolution',
+        // H.264 çoğu cihazda donanımla kodlanır; 1080p60 yazılım VP8'e göre CPU'yu rahatlatır
+        videoCodec: 'h264',
+        // Egress en üst katmanı alır; zayıf bağlantılı misafirler 360p katmanına düşebilir
+        simulcast: true,
+        videoSimulcastLayers: [VideoPresets.h360],
+        videoEncoding: { maxBitrate: effectiveBitrate(settings) * 1000, maxFramerate: settings.fps },
+        degradationPreference: 'balanced',
       })
       .then((pub) => {
         if (!cancelled) onCompositeSid(pub.trackSid);
@@ -185,7 +192,19 @@ function HostStage({ canvasRef, stage, layout, brand, banner, settings, onCompos
         track.stop();
       });
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasRef, localParticipant, settings.fps, settings.videoBitrate, width, height, onCompositeSid]);
+
+  // Tam yeniden bağlanmada izler yeni kimliklerle yeniden yayınlanır; egress'in yeniden bağlanabilmesi için takip et
+  useEffect(() => {
+    const onPublished = (pub: LocalTrackPublication) => {
+      if (pub.trackName === 'canvas-composite') onCompositeSid(pub.trackSid);
+    };
+    room.on(RoomEvent.LocalTrackPublished, onPublished);
+    return () => {
+      room.off(RoomEvent.LocalTrackPublished, onPublished);
+    };
+  }, [room, onCompositeSid]);
 
   return (
     <>
@@ -223,7 +242,21 @@ function StudioContent({
 }) {
   const room = useRoomContext();
   const { localParticipant } = useLocalParticipant();
-  const participants = useParticipants();
+  const participants = useParticipants({
+    updateOnlyOn: [
+      RoomEvent.ParticipantConnected,
+      RoomEvent.ParticipantDisconnected,
+      RoomEvent.ParticipantNameChanged,
+      RoomEvent.TrackPublished,
+      RoomEvent.TrackUnpublished,
+      RoomEvent.TrackSubscribed,
+      RoomEvent.TrackUnsubscribed,
+      RoomEvent.TrackMuted,
+      RoomEvent.TrackUnmuted,
+      RoomEvent.LocalTrackPublished,
+      RoomEvent.LocalTrackUnpublished,
+    ],
+  });
   const screenTracks = useTracks([Track.Source.ScreenShare]);
   const isHost = role === 'host';
 
@@ -233,7 +266,7 @@ function StudioContent({
   const [brand, setBrand] = useState<BrandConfig>(() => brandFromBroadcast(initialBroadcast));
   const [banners, setBanners] = useState<Banner[]>(() => parseBanners(initialBroadcast?.banners));
   const [activeBannerId, setActiveBannerId] = useState<string | null>(null);
-  const [settings, setSettings] = useState<StreamSettings>({ quality: '1080p', fps: 30, videoBitrate: DEFAULT_BITRATE['1080p'] });
+  const [settings, setSettings] = useState<StreamSettings>({ quality: '1080p', fps: 30, videoBitrate: DEFAULT_BITRATE['1080p'], audioDelayMs: null });
   const initiallyLive = !!initialBroadcast?.targets.some((t) => t.egress_id);
   const [isLive, setIsLive] = useState(initiallyLive);
   const [liveSince, setLiveSince] = useState<number | null>(
@@ -252,7 +285,7 @@ function StudioContent({
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const recorder = useLocalRecorder();
-  const { mixedTrack, mixStream } = useAudioMixer(room, isHost, stage);
+  const { mixStream, mixSid } = useAudioMixer(room, isHost, stage, audioDelayFor(settings));
 
   const activeBanner = banners.find((b) => b.id === activeBannerId) || null;
 
@@ -266,18 +299,29 @@ function StudioContent({
     setStage([{ identity: localParticipant.identity, source: 'camera' }]);
   }, [isHost, localParticipant?.identity]);
 
-  // Ayrılan katılımcıları ve biten ekran paylaşımlarını sahneden çıkar
+  // Biten ekran paylaşımlarını hemen, ayrılan katılımcıları ise bir süre bekleyip sahneden çıkar.
+  // Yeniden bağlanan biri (ya da yapımcının kendi bağlantısı yenilenirken tüm misafirler)
+  // kısa süreliğine listeden düşer; hemen çıkarılsaydı yayında sahne boşalırdı.
   const connectedKey = participants.map((p) => p.identity).sort().join('|');
   const screenKey = screenTracks.map((t) => t.participant.identity).sort().join('|');
   useEffect(() => {
-    if (!isHost) return;
+    if (!isHost || room.state !== ConnectionState.Connected) return;
     const connected = new Set(connectedKey.split('|'));
     const sharing = new Set(screenKey.split('|'));
     setStage((prev) => {
-      const next = prev.filter((i) => connected.has(i.identity) && (i.source === 'camera' || sharing.has(i.identity)));
+      const next = prev.filter((i) => !(i.source === 'screen' && connected.has(i.identity) && !sharing.has(i.identity)));
       return next.length === prev.length ? prev : next;
     });
-  }, [isHost, connectedKey, screenKey]);
+    const t = setTimeout(() => {
+      if (room.state !== ConnectionState.Connected) return;
+      const present = new Set([room.localParticipant.identity, ...Array.from(room.remoteParticipants.keys())]);
+      setStage((prev) => {
+        const next = prev.filter((i) => present.has(i.identity));
+        return next.length === prev.length ? prev : next;
+      });
+    }, 20000);
+    return () => clearTimeout(t);
+  }, [isHost, room, connectedKey, screenKey]);
 
   // Yapımcı ekran paylaşınca paylaşım otomatik olarak sahneye alınır
   const localSharing = !!localParticipant && screenTracks.some((t) => t.participant.identity === localParticipant.identity);
@@ -313,9 +357,14 @@ function StudioContent({
 
   // ---------- Veri kanalları: sahne senkronu ve sohbet ----------
 
-  const sendScene = useStudioChannel<SceneMessage | { type: 'scene-request' }>(room, 'scene', (data) => {
-    if (isHost && data.type === 'scene-request') publishSceneRef.current();
-    if (!isHost && data.type === 'scene') setRemoteScene(data);
+  const sendScene = useStudioChannel<SceneMessage | { type: 'scene-request' }>(room, 'scene', (data, from) => {
+    if (isHost && data?.type === 'scene-request') publishSceneRef.current();
+    if (isHost || data?.type !== 'scene') return;
+    // Misafirler de veri yayınlayabildiği için sahte sahne mesajlarını yok say
+    if (!from?.identity.startsWith('host-')) return;
+    if (!Array.isArray(data.stage) || typeof data.layout !== 'string') return;
+    const stage = data.stage.filter((i): i is StageItem => !!i && typeof i.identity === 'string' && (i.source === 'camera' || i.source === 'screen'));
+    setRemoteScene({ type: 'scene', stage, layout: data.layout, isLive: data.isLive === true });
   });
 
   const publishScene = useCallback(() => {
@@ -332,19 +381,27 @@ function StudioContent({
 
   useEffect(() => {
     if (!isHost) return;
-    const onJoin = () => setTimeout(() => publishSceneRef.current(), 600);
-    room.on(RoomEvent.ParticipantConnected, onJoin);
+    const resend = () => setTimeout(() => publishSceneRef.current(), 600);
+    room.on(RoomEvent.ParticipantConnected, resend);
+    // Yeniden bağlanırken gönderilemeyen güncellemeler kaybolur; bağlantı dönünce tekrar yayınla
+    room.on(RoomEvent.Reconnected, resend);
     return () => {
-      room.off(RoomEvent.ParticipantConnected, onJoin);
+      room.off(RoomEvent.ParticipantConnected, resend);
+      room.off(RoomEvent.Reconnected, resend);
     };
   }, [isHost, room]);
 
-  // Misafir bağlanınca güncel sahneyi ister
+  // Misafir bağlanınca (ve yeniden bağlanınca) güncel sahneyi ister
   useEffect(() => {
     if (isHost) return;
-    const t = setTimeout(() => sendScene({ type: 'scene-request' }).catch(() => undefined), 800);
-    return () => clearTimeout(t);
-  }, [isHost, sendScene]);
+    const ask = () => sendScene({ type: 'scene-request' }).catch(() => undefined);
+    const t = setTimeout(ask, 800);
+    room.on(RoomEvent.Reconnected, ask);
+    return () => {
+      clearTimeout(t);
+      room.off(RoomEvent.Reconnected, ask);
+    };
+  }, [isHost, room, sendScene]);
 
   const sidebarTabRef = useRef(sidebarTab);
   sidebarTabRef.current = sidebarTab;
@@ -386,20 +443,24 @@ function StudioContent({
   );
 
   const updateBrand = (patch: Partial<BrandConfig>) => {
-    setBrand((prev) => {
-      const next = { ...prev, ...patch };
-      queueSave({
-        brand_color: next.color,
-        theme: next.theme,
-        show_names: next.showNames,
-        logo_url: next.logoUrl,
-        show_logo: next.showLogo,
-        overlay_url: next.overlayUrl,
-        show_overlay: next.showOverlay,
-        background_url: next.backgroundUrl,
-      });
-      return next;
+    setBrand((prev) => ({ ...prev, ...patch }));
+    // Yalnızca değişen alanlar gönderilir: logo/overlay/arka plan data URL'leri megabaytlarca olabilir
+    // ve yayındayken yükleme bant genişliğini gereksiz yere tüketir.
+    const fields: Record<keyof BrandConfig, string> = {
+      color: 'brand_color',
+      theme: 'theme',
+      showNames: 'show_names',
+      logoUrl: 'logo_url',
+      showLogo: 'show_logo',
+      overlayUrl: 'overlay_url',
+      showOverlay: 'show_overlay',
+      backgroundUrl: 'background_url',
+    };
+    const body: Record<string, unknown> = {};
+    (Object.keys(patch) as (keyof BrandConfig)[]).forEach((k) => {
+      body[fields[k]] = patch[k];
     });
+    queueSave(body);
   };
 
   const updateBanners = (next: Banner[]) => {
@@ -418,14 +479,15 @@ function StudioContent({
     }
   }, [studioCode]);
 
-  const startEgress = async (updated: Broadcast) => {
-    setBroadcast(updated);
-    if (!compositeSid) throw new Error('Stüdyo görüntüsü henüz hazır değil. Birkaç saniye sonra tekrar deneyin.');
-    const audioTrackId = mixedTrack?.sid || localParticipant.getTrackPublication(Track.Source.Microphone)?.trackSid;
-    if (!audioTrackId) throw new Error('Ses kaynağı bulunamadı. Mikrofonunuzu kontrol edin.');
-    if (updated.targets.length === 0) throw new Error('Lütfen en az bir hedef seçin.');
+  // Egress'in bağlı olduğu iz kimlikleri. Yeniden bağlanma veya sayfa yenileme sonrası izler
+  // yeni kimliklerle yayınlanınca egress bu eski kimliklere bağlı kalır ve yayın akmaz.
+  const boundTracksRef = useRef<{ video: string; audio: string } | null>(null);
+  const rebindingRef = useRef(false);
 
-    // Yalnızca ağ hatası ve geçici (503/504) yanıtlar yeniden denenir.
+  const currentAudioTrackId = () => mixSid || localParticipant.getTrackPublication(Track.Source.Microphone)?.trackSid || null;
+
+  /** start-egress isteği; yalnızca ağ hatası ve geçici (503/504) yanıtlar yeniden denenir. */
+  const requestEgress = async (videoTrackId: string, audioTrackId: string, restart: boolean) => {
     const maxRetries = 3;
     let lastError = '';
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -435,12 +497,13 @@ function StudioContent({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            trackId: compositeSid,
+            trackId: videoTrackId,
             audioTrackId,
             quality: settings.quality,
             fps: settings.fps,
             videoBitrate: settings.videoBitrate,
             audioBitrate: 128,
+            restart,
           }),
         });
       } catch (err: any) {
@@ -452,14 +515,11 @@ function StudioContent({
 
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setIsLive(true);
-        setLiveSince(data.started_at ? Date.parse(data.started_at) : Date.now());
-        toast.success('Canlı yayındasınız!');
+        boundTracksRef.current = { video: videoTrackId, audio: audioTrackId };
         if (Array.isArray(data.failed) && data.failed.length > 0) {
           toast.error(`${data.failed.map((f: any) => f.name || f.platform).join(', ')} hedefine bağlanılamadı.`);
         }
-        refreshBroadcast();
-        return;
+        return data as { started_at?: string };
       }
 
       lastError = data.error || '';
@@ -476,6 +536,42 @@ function StudioContent({
     throw new Error(lastError || 'Yayın başlatılamadı.');
   };
 
+  const startEgress = async (updated: Broadcast) => {
+    setBroadcast(updated);
+    if (!compositeSid) throw new Error('Stüdyo görüntüsü henüz hazır değil. Birkaç saniye sonra tekrar deneyin.');
+    const audioTrackId = currentAudioTrackId();
+    if (!audioTrackId) throw new Error('Ses kaynağı bulunamadı. Mikrofonunuzu kontrol edin.');
+    if (updated.targets.length === 0) throw new Error('Lütfen en az bir hedef seçin.');
+
+    const data = await requestEgress(compositeSid, audioTrackId, false);
+    setIsLive(true);
+    setLiveSince(data.started_at ? Date.parse(data.started_at) : Date.now());
+    toast.success('Canlı yayındasınız!');
+    refreshBroadcast();
+  };
+
+  // Yayındayken izler yeni kimlik aldıysa (yeniden bağlanma, sayfa yenileme) egress'i yeni izlere bağla
+  useEffect(() => {
+    if (!isHost || !isLive || !compositeSid || !mixSid || rebindingRef.current) return;
+    const bound = boundTracksRef.current;
+    if (bound && bound.video === compositeSid && bound.audio === mixSid) return;
+    rebindingRef.current = true;
+    requestEgress(compositeSid, mixSid, true)
+      .then(() => {
+        toast('Yayın bağlantısı yenilendi, yayın sürüyor.');
+        refreshBroadcast();
+      })
+      .catch((err: Error) => {
+        toast.error(`Yayın yeniden bağlanamadı: ${err.message}`);
+        setIsLive(false);
+        setLiveSince(null);
+      })
+      .finally(() => {
+        rebindingRef.current = false;
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, isLive, compositeSid, mixSid]);
+
   const stopEgress = async () => {
     setBusy(true);
     try {
@@ -484,12 +580,16 @@ function StudioContent({
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || res.statusText);
       }
+      boundTracksRef.current = null;
       setIsLive(false);
       setLiveSince(null);
       toast.success('Yayın sona erdi.');
       refreshBroadcast();
+      return true;
     } catch (err: any) {
-      if (!String(err.message).includes('Session expired')) toast.error(`Yayın durdurulamadı: ${err.message}`);
+      // Durdurulamayan çıkışlar yayında kalır; kullanıcı tekrar deneyebilsin diye durumu değiştirme
+      if (!String(err.message).includes('Session expired')) toast.error(`Yayın durdurulamadı, tekrar deneyin. ${err.message}`);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -541,6 +641,9 @@ function StudioContent({
         text: 'Yayın devam ediyor. Stüdyodan çıkarsanız yayın sona erer.',
         action: 'Yayını bitir ve çık',
         onConfirm: async () => {
+          if (recorder.isRecording) recorder.stop();
+          // Durdurma başarısız olsa bile ayrılınca izler kalkar ve egress kendiliğinden sona erer;
+          // kalan kayıtlar bir sonraki yayın başlatılırken temizlenir.
           await stopEgress();
           room.disconnect();
         },
@@ -600,7 +703,7 @@ function StudioContent({
         statusSlot={
           isLive ? (
             <div className="hidden lg:block">
-              <BitrateIndicator targetBitrate={settings.fps === 60 ? Math.round(settings.videoBitrate * 1.5) : settings.videoBitrate} isLive={isLive} />
+              <BitrateIndicator targetBitrate={effectiveBitrate(settings)} isLive={isLive} />
             </div>
           ) : null
         }
@@ -747,7 +850,9 @@ export default function StudioSession({ token, serverUrl, studioCode, role, titl
     () => (choices.audioEnabled ? { deviceId: choices.audioDeviceId, echoCancellation: true, noiseSuppression: true, autoGainControl: true } : false),
     [choices.audioEnabled, choices.audioDeviceId]
   );
-  const options = useMemo(() => ({ adaptiveStream: false, dynacast: true, videoCaptureDefaults: { resolution } }), [resolution]);
+  // Yapımcı kompozit için her görüntüyü tam çözünürlükte almalı; misafirler ise ekrandaki boyuta göre
+  // daha düşük katmanlara inebilir (bant genişliği ve yapımcının kodlama yükü azalır).
+  const options = useMemo(() => ({ adaptiveStream: role === 'guest', dynacast: true, videoCaptureDefaults: { resolution } }), [resolution, role]);
   const [connected, setConnected] = useState(false);
 
   return (
@@ -759,7 +864,14 @@ export default function StudioSession({ token, serverUrl, studioCode, role, titl
       audio={audio}
       options={options}
       onConnected={() => setConnected(true)}
-      onDisconnected={(reason) => onLeft(reason === DisconnectReason.PARTICIPANT_REMOVED ? 'removed' : reason === DisconnectReason.ROOM_DELETED ? 'ended' : 'left')}
+      onDisconnected={(reason) => {
+        if (reason === DisconnectReason.CLIENT_INITIATED) onLeft('left');
+        else if (reason === DisconnectReason.PARTICIPANT_REMOVED) onLeft('removed');
+        else if (reason === DisconnectReason.ROOM_DELETED) onLeft('ended');
+        else if (reason === DisconnectReason.DUPLICATE_IDENTITY) onLeft('duplicate');
+        // Ağ kopması vb.: kullanıcıyı sessizce panele atmak yerine yeniden bağlanma ekranı göster
+        else onLeft('error');
+      }}
       onError={(e) => toast.error(e.message)}
       onMediaDeviceFailure={(failure, kind) => {
         const what = kind === 'videoinput' ? 'Kamera' : kind === 'audioinput' ? 'Mikrofon' : 'Cihaz';

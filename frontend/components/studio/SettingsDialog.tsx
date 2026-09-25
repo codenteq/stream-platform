@@ -5,7 +5,7 @@ import { useMediaDeviceSelect } from '@livekit/components-react';
 import { Camera, Gauge, Volume2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { BITRATE_OPTIONS, DEFAULT_BITRATE, type QualityId, type StreamSettings } from '@/lib/studio/types';
+import { BITRATE_OPTIONS, DEFAULT_BITRATE, audioDelayFor, autoAudioDelayMs, type QualityId, type StreamSettings } from '@/lib/studio/types';
 import { cn } from '@/lib/utils';
 
 type Tab = 'camera' | 'audio' | 'quality';
@@ -78,6 +78,38 @@ export function SettingsDialog({ open, onOpenChange, isHost, isLive, settings, o
               <>
                 <DeviceSelect kind="audioinput" label="Mikrofon" />
                 <DeviceSelect kind="audiooutput" label="Hoparlör" />
+                {isHost && (
+                  <div className="space-y-2 border-t pt-5">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="av-delay">Ses-görüntü senkronu</Label>
+                      <span className="tabular text-sm font-semibold">{audioDelayFor(settings)} ms</span>
+                    </div>
+                    <input
+                      id="av-delay"
+                      type="range"
+                      min={0}
+                      max={400}
+                      step={10}
+                      value={audioDelayFor(settings)}
+                      onChange={(e) => onSettingsChange({ ...settings, audioDelayMs: Number(e.target.value) })}
+                      className="w-full accent-[hsl(var(--primary))]"
+                    />
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs text-muted-foreground">
+                        Yayında ses görüntünün önünde gidiyorsa artırın. Otomatik değer kare hızına göre {autoAudioDelayMs(settings.fps)} ms.
+                      </p>
+                      {settings.audioDelayMs !== null && (
+                        <button
+                          type="button"
+                          className="shrink-0 text-xs font-medium text-primary hover:underline"
+                          onClick={() => onSettingsChange({ ...settings, audioDelayMs: null })}
+                        >
+                          Otomatiğe dön
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </>
             )}
             {tab === 'quality' && isHost && (

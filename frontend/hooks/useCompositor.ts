@@ -75,9 +75,21 @@ export function useCompositor(
     const W = width;
     const H = height;
 
+    // Arka plan (degrade ya da görsel) yalnızca marka/görsel değişince yeniden çizilir
+    const bgCanvas = document.createElement('canvas');
+    bgCanvas.width = W;
+    bgCanvas.height = H;
+    const bgCtx = bgCanvas.getContext('2d', { alpha: false });
+    let bgKey = '';
+
     const draw = () => {
       const { room, stage, layout, brand, banner } = inputRef.current;
-      drawBackground(ctx, W, H, brand, bgRef.current);
+      const key = `${brand.color}|${bgRef.current?.src ?? ''}`;
+      if (bgCtx && key !== bgKey) {
+        drawBackground(bgCtx, W, H, brand, bgRef.current);
+        bgKey = key;
+      }
+      ctx.drawImage(bgCanvas, 0, 0);
 
       const items = stage.slice(0, layoutCapacity(layout));
       const { boxes, fullBleedMain } = computeLayout(layout, items.length, W, H);
@@ -132,9 +144,19 @@ export function useCompositor(
       if (brand.showOverlay && overlayRef.current) ctx.drawImage(overlayRef.current, 0, 0, W, H);
     };
 
+    const interval = 1000 / fps;
+    let lastDraw = 0;
+    const tick = () => {
+      // Ana iş parçacığı meşgulken biriken tikler art arda çizim yapmasın (geri basınç)
+      const now = performance.now();
+      if (now - lastDraw < interval * 0.5) return;
+      lastDraw = now;
+      draw();
+    };
+
     const worker = new Worker('/timer-worker.js');
-    worker.onmessage = draw;
-    worker.postMessage({ type: 'start', interval: 1000 / fps });
+    worker.onmessage = tick;
+    worker.postMessage({ type: 'start', interval });
     draw();
 
     return () => {

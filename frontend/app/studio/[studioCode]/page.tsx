@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, LogOut, UserX, VideoOff } from 'lucide-react';
+import { Loader2, LogOut, UserX, VideoOff, WifiOff } from 'lucide-react';
 import StudioSession, { type LeaveReason } from '@/components/StudioSession';
 import { Lobby, type JoinChoices } from '@/components/studio/Lobby';
 import { Logo } from '@/components/app/Logo';
@@ -137,6 +137,13 @@ export default function StudioPage() {
     setLeaveReason(reason);
     setToken('');
     setPhase('left');
+    // Yeniden katılınca stüdyo güncel yayın durumuyla açılsın
+    if (role === 'host') {
+      fetch(`/api/broadcasts/studio/${studioCode}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` } })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((b) => b && setBroadcast(b))
+        .catch(() => undefined);
+    }
   };
 
   if (!serverUrl) {
@@ -162,14 +169,35 @@ export default function StudioPage() {
   }
 
   if (phase === 'left') {
-    const removed = leaveReason === 'removed';
+    const messages: Record<LeaveReason, { icon: React.ReactNode; title: string; text: string; action: string }> = {
+      left: { icon: <LogOut className="h-6 w-6" />, title: 'Stüdyodan ayrıldınız', text: 'Katıldığınız için teşekkürler!', action: 'Tekrar katıl' },
+      removed: { icon: <UserX className="h-6 w-6" />, title: 'Stüdyodan çıkarıldınız', text: 'Yapımcı sizi stüdyodan çıkardı.', action: 'Tekrar katıl' },
+      ended: { icon: <LogOut className="h-6 w-6" />, title: 'Stüdyo kapandı', text: 'Bu stüdyo oturumu sona erdi.', action: 'Tekrar katıl' },
+      duplicate: {
+        icon: <WifiOff className="h-6 w-6" />,
+        title: 'Stüdyo başka bir sekmede açıldı',
+        text: 'Aynı kişi olarak stüdyoya başka bir sekmeden ya da cihazdan girildi. Bu sekmedeki bağlantı kapatıldı.',
+        action: 'Bu sekmede devam et',
+      },
+      error: {
+        icon: <WifiOff className="h-6 w-6" />,
+        title: 'Bağlantı koptu',
+        text:
+          role === 'host'
+            ? 'Stüdyoyla bağlantınız kesildi. Yeniden bağlandığınızda yayın, yeni bağlantıya otomatik olarak aktarılır.'
+            : 'Stüdyoyla bağlantınız kesildi. İnternet bağlantınızı kontrol edip yeniden katılın.',
+        action: 'Yeniden bağlan',
+      },
+    };
+    const m = messages[leaveReason];
     return (
-      <FullScreenMessage
-        icon={removed ? <UserX className="h-6 w-6" /> : <LogOut className="h-6 w-6" />}
-        title={removed ? 'Stüdyodan çıkarıldınız' : 'Stüdyodan ayrıldınız'}
-        text={removed ? 'Yapımcı sizi stüdyodan çıkardı.' : 'Katıldığınız için teşekkürler!'}
-      >
-        <Button onClick={() => setPhase('lobby')}>Tekrar katıl</Button>
+      <FullScreenMessage icon={m.icon} title={m.title} text={m.text}>
+        <Button onClick={() => setPhase('lobby')}>{m.action}</Button>
+        {role === 'host' && (
+          <Button variant="ghost" asChild>
+            <Link href="/dashboard">Panele dön</Link>
+          </Button>
+        )}
       </FullScreenMessage>
     );
   }

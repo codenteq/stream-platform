@@ -110,4 +110,16 @@ export interface StreamSettings {
   quality: QualityId;
   fps: number;
   videoBitrate: number;
+  /** Sesin geciktirilme süresi (ms). null: kare hızına göre otomatik */
+  audioDelayMs: number | null;
 }
+
+/** 60 FPS'te bit hızı %50 artırılır; yayın, egress ve gösterge aynı değeri kullanır. */
+export const effectiveBitrate = (s: StreamSettings) => (s.fps === 60 ? Math.round(s.videoBitrate * 1.5) : s.videoBitrate);
+
+/**
+ * Kompozit görüntü canvas'tan geçerken yaklaşık iki kare gecikir (çizim + yakalama/kodlama).
+ * Ses bu kadar geciktirilmezse yayında görüntünün önünde gider.
+ */
+export const autoAudioDelayMs = (fps: number) => Math.round((1000 / fps) * 2);
+export const audioDelayFor = (s: StreamSettings) => s.audioDelayMs ?? autoAudioDelayMs(s.fps);

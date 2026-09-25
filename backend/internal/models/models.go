@@ -116,6 +116,9 @@ type TrackEgressInput struct {
 	FPS          int32  `json:"fps"`
 	VideoBitrate int32  `json:"videoBitrate"` // kbps cinsinden, 0 ise varsayılan kullanılır
 	AudioBitrate int32  `json:"audioBitrate"` // kbps cinsinden, 0 ise varsayılan 128 kullanılır
+	// Restart, yayındaki egress'leri durdurup yeni iz kimlikleriyle yeniden başlatır
+	// (ör. yeniden bağlanma veya sayfa yenileme sonrası izler yeniden yayınlandığında).
+	Restart bool `json:"restart"`
 }
 
 type StreamingTargetInput struct {

@@ -236,16 +236,41 @@ function tagStyle(theme: BrandTheme, color: string) {
   }
 }
 
-export function drawNameTag(ctx: CanvasRenderingContext2D, name: string, box: Box, brand: BrandConfig, canvasH: number) {
+interface CachedTag {
+  canvas: HTMLCanvasElement;
+  w: number;
+  h: number;
+  margin: number;
+}
+
+// İsim etiketleri (gölge ve ölçüm dahil) bir kez çizilip önbellekten kopyalanır;
+// her karede shadowBlur ve measureText döngüsü çalıştırmak 1080p60'ta pahalıdır.
+const tagCache = new Map<string, CachedTag>();
+const TAG_CACHE_LIMIT = 64;
+
+function fontReady(family: string) {
+  try {
+    return document.fonts?.check(`700 20px ${family}`) ?? true;
+  } catch {
+    return true;
+  }
+}
+
+function renderTag(name: string, brand: BrandConfig, fs: number, maxW: number, canvasH: number): CachedTag {
+  const family = fontFamily();
+  const key = [name, brand.theme, brand.color, Math.round(fs * 10), Math.round(maxW), canvasH, fontReady(family)].join('|');
+  const hit = tagCache.get(key);
+  if (hit) return hit;
+
   const s = tagStyle(brand.theme, brand.color);
-  const scale = brand.theme === 'bold' ? 1.2 : 1;
-  const fs = Math.max(canvasH * 0.017, Math.min(canvasH * 0.03, box.h * 0.065)) * scale;
-  const text = s.upper ? name.toUpperCase() : name;
-  ctx.font = `${s.weight} ${fs}px ${fontFamily()}`;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  const font = `${s.weight} ${fs}px ${family}`;
+  ctx.font = font;
   setStretch(ctx, 'expanded');
+  const text = s.upper ? name.toUpperCase() : name;
   const padX = fs * 0.7;
   const padY = fs * 0.42;
-  const maxW = box.w * 0.8;
   let label = text;
   while (ctx.measureText(label).width + padX * 2 > maxW && label.length > 3) label = label.slice(0, -2);
   if (label !== text) label = label.trimEnd() + '…';
@@ -253,25 +278,40 @@ export function drawNameTag(ctx: CanvasRenderingContext2D, name: string, box: Bo
   const accentW = s.accent ? fs * 0.3 : 0;
   const w = tw + padX * 2 + accentW;
   const h = fs + padY * 2;
-  const inset = Math.max(canvasH * 0.012, box.h * 0.035);
-  const x = box.x + inset;
-  const y = box.y + box.h - h - inset;
+  const margin = Math.ceil(fs * 0.8); // gölge payı
 
+  canvas.width = Math.ceil(w + margin * 2);
+  canvas.height = Math.ceil(h + margin * 2);
+  // Boyut değişince bağlam sıfırlanır
+  ctx.font = font;
+  setStretch(ctx, 'expanded');
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.25)';
   ctx.shadowBlur = fs * 0.4;
-  roundRectPath(ctx, x, y, w, h, s.radius === 999 ? h / 2 : s.radius * (canvasH / 1080));
+  roundRectPath(ctx, margin, margin, w, h, s.radius === 999 ? h / 2 : s.radius * (canvasH / 1080));
   ctx.fillStyle = s.bg;
   ctx.fill();
   ctx.restore();
   if (s.accent) {
     ctx.fillStyle = s.fg;
-    ctx.fillRect(x, y, accentW, h);
+    ctx.fillRect(margin, margin, accentW, h);
   }
   ctx.fillStyle = s.fg;
   ctx.textBaseline = 'middle';
-  ctx.fillText(label, x + accentW + padX, y + h / 2 + fs * 0.04);
-  setStretch(ctx, 'normal');
+  ctx.fillText(label, margin + accentW + padX, margin + h / 2 + fs * 0.04);
+
+  const tag = { canvas, w, h, margin };
+  tagCache.set(key, tag);
+  if (tagCache.size > TAG_CACHE_LIMIT) tagCache.delete(tagCache.keys().next().value as string);
+  return tag;
+}
+
+export function drawNameTag(ctx: CanvasRenderingContext2D, name: string, box: Box, brand: BrandConfig, canvasH: number) {
+  const scale = brand.theme === 'bold' ? 1.2 : 1;
+  const fs = Math.max(canvasH * 0.017, Math.min(canvasH * 0.03, box.h * 0.065)) * scale;
+  const tag = renderTag(name, brand, fs, box.w * 0.8, canvasH);
+  const inset = Math.max(canvasH * 0.012, box.h * 0.035);
+  ctx.drawImage(tag.canvas, box.x + inset - tag.margin, box.y + box.h - tag.h - inset - tag.margin);
 }
 
 function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxW: number, maxLines: number) {
