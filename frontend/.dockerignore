@@ -1,0 +1,5 @@
+# Installed and built inside the image; host copies would overwrite them.
+node_modules
+.next
+.env*.local
+npm-debug.log*
