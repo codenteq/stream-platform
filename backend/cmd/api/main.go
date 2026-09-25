@@ -12,7 +12,9 @@ import (
 func main() {
 	database.ConnectDatabase()
 
-	app := fiber.New()
+	// Marka görselleri (logo, overlay, arka plan) data URL olarak gönderilebildiği için
+	// varsayılan 4MB gövde sınırı yükseltildi.
+	app := fiber.New(fiber.Config{BodyLimit: 16 * 1024 * 1024})
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("Hello from Go Backend! Broadcast management is ready.")

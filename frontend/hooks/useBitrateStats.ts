@@ -63,11 +63,17 @@ export function useBitrateStats(
             let totalVideoBytes = 0;
             let totalAudioBytes = 0;
 
+            // Yayına giden izler: stüdyo kompozit görüntüsü ve ses miksi. Yoksa kamera/ekran/mikrofon.
+            const allPubs = Array.from(localParticipant.trackPublications.values());
+            const compositePublication = allPubs.find(p => p.trackName === 'canvas-composite');
+            const mixPublication = allPubs.find(p => p.trackName === 'broadcast-mix');
+
             // Video track stats
             const videoPublication = localParticipant.getTrackPublication(Track.Source.Camera);
             const screenSharePublication = localParticipant.getTrackPublication(Track.Source.ScreenShare);
+            const videoPublications = compositePublication ? [compositePublication] : [videoPublication, screenSharePublication];
 
-            for (const pub of [videoPublication, screenSharePublication]) {
+            for (const pub of videoPublications) {
                 if (pub?.track?.sender) {
                     const report = await pub.track.sender.getStats();
                     report.forEach((stat: RTCStats & { bytesSent?: number; kind?: string }) => {
@@ -79,7 +85,7 @@ export function useBitrateStats(
             }
 
             // Audio track stats
-            const audioPublication = localParticipant.getTrackPublication(Track.Source.Microphone);
+            const audioPublication = mixPublication ?? localParticipant.getTrackPublication(Track.Source.Microphone);
             if (audioPublication?.track?.sender) {
                 const report = await audioPublication.track.sender.getStats();
                 report.forEach((stat: RTCStats & { bytesSent?: number; kind?: string }) => {

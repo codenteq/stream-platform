@@ -18,9 +18,9 @@ export function BitrateIndicator({ targetBitrate, isLive }: BitrateIndicatorProp
 
     if (!stats) {
         return (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 rounded-lg border border-gray-700">
-                <Activity className="w-4 h-4 text-gray-400 animate-pulse" />
-                <span className="text-sm text-gray-400">Bitrate ölçülüyor...</span>
+            <div className="flex items-center gap-2 px-2.5 py-1 bg-background rounded-lg border">
+                <Activity className="w-4 h-4 text-muted-foreground animate-pulse" />
+                <span className="text-sm text-muted-foreground">Bitrate ölçülüyor...</span>
             </div>
         );
     }
@@ -32,7 +32,7 @@ export function BitrateIndicator({ targetBitrate, isLive }: BitrateIndicatorProp
     const getStatus = () => {
         if (percentage >= 80) {
             return {
-                color: 'text-green-400',
+                color: 'text-emerald-600',
                 bgColor: 'bg-green-500',
                 borderColor: 'border-green-500/30',
                 label: 'Mükemmel',
@@ -41,7 +41,7 @@ export function BitrateIndicator({ targetBitrate, isLive }: BitrateIndicatorProp
         }
         if (percentage >= 50) {
             return {
-                color: 'text-yellow-400',
+                color: 'text-amber-600',
                 bgColor: 'bg-yellow-500',
                 borderColor: 'border-yellow-500/30',
                 label: 'Orta',
@@ -49,7 +49,7 @@ export function BitrateIndicator({ targetBitrate, isLive }: BitrateIndicatorProp
             };
         }
         return {
-            color: 'text-red-400',
+            color: 'text-red-600',
             bgColor: 'bg-red-500',
             borderColor: 'border-red-500/30',
             label: 'Düşük',
@@ -75,7 +75,7 @@ export function BitrateIndicator({ targetBitrate, isLive }: BitrateIndicatorProp
     return (
         <div className="relative">
             <div
-                className={`flex items-center gap-2 px-3 py-1.5 bg-gray-800/80 backdrop-blur-sm rounded-lg border ${status.borderColor} transition-all duration-300 cursor-pointer`}
+                className={`flex items-center gap-2 px-2.5 py-1 bg-background rounded-lg border ${status.borderColor} transition-all duration-300 cursor-pointer`}
                 onClick={() => setShowGraph(!showGraph)}
                 title={`Video: ${formatBitrate(currentBitrate)} | Audio: ${formatBitrate(stats.outboundAudioBitrate)} | Hedef: ${formatBitrate(targetBitrate)} | Tahmini: ~${calculateDataUsage(totalBitrate)} GB/saat`}
             >
@@ -92,20 +92,20 @@ export function BitrateIndicator({ targetBitrate, isLive }: BitrateIndicatorProp
                     <span className={`text-sm font-medium ${status.color}`}>
                         {formatBitrate(currentBitrate)}
                     </span>
-                    <span className="text-xs text-gray-500">/</span>
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-muted-foreground">/</span>
+                    <span className="text-xs text-muted-foreground">
                         {formatBitrate(targetBitrate)}
                     </span>
                 </div>
 
                 {/* Data usage */}
-                <div className="flex items-center gap-1 text-xs text-gray-400 border-l border-gray-600 pl-2">
+                <div className="flex items-center gap-1 text-xs text-muted-foreground border-l border-border pl-2">
                     <HardDrive className="w-3 h-3" />
                     <span>~{calculateDataUsage(totalBitrate)} GB/sa</span>
                 </div>
 
                 {/* Graph toggle */}
-                <div className="flex items-center gap-1 text-xs text-gray-400 border-l border-gray-600 pl-2">
+                <div className="flex items-center gap-1 text-xs text-muted-foreground border-l border-border pl-2">
                     <BarChart3 className="w-3 h-3" />
                     {showGraph ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                 </div>
@@ -118,9 +118,9 @@ export function BitrateIndicator({ targetBitrate, isLive }: BitrateIndicatorProp
 
             {/* Expandable Graph */}
             {showGraph && stats.history && (
-                <div className="absolute top-full left-0 mt-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute top-full right-0 mt-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="bg-gray-900/95 backdrop-blur-sm rounded-lg border border-gray-700 p-2 shadow-xl">
-                        <div className="text-xs text-gray-400 mb-1 flex items-center gap-1">
+                        <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                             <BarChart3 className="w-3 h-3" />
                             <span>Son 5 dakika</span>
                         </div>
@@ -130,7 +130,7 @@ export function BitrateIndicator({ targetBitrate, isLive }: BitrateIndicatorProp
                             width={220}
                             height={70}
                         />
-                        <div className="flex justify-between mt-1 text-[10px] text-gray-500">
+                        <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
                             <span>5dk önce</span>
                             <span>Şimdi</span>
                         </div>

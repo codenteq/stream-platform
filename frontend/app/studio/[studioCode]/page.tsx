@@ -1,123 +1,203 @@
 'use client';
 
-import { useParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
-import StudioSession from '@/components/StudioSession';
-import { fetchWithAuth } from '@/lib/utils';
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Loader2, LogOut, UserX, VideoOff } from 'lucide-react';
+import StudioSession, { type LeaveReason } from '@/components/StudioSession';
+import { Lobby, type JoinChoices } from '@/components/studio/Lobby';
+import { Logo } from '@/components/app/Logo';
+import { Button } from '@/components/ui/button';
+import type { Broadcast } from '@/lib/types';
+
+type Phase = 'loading' | 'notfound' | 'lobby' | 'studio' | 'left';
+
+interface StudioInfo {
+  title: string;
+  host_name: string;
+  status: string;
+}
+
+const GUEST_NAME_KEY = 'studio-guest-name';
+
+function FullScreenMessage({ icon, title, text, children }: { icon: React.ReactNode; title: string; text: string; children?: React.ReactNode }) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-muted/60 px-4 text-center">
+      <Logo className="mb-10" />
+      <div className="w-full max-w-md rounded-2xl border bg-background p-8 shadow-sm">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-primary">{icon}</div>
+        <h1 className="text-xl font-bold">{title}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{text}</p>
+        {children && <div className="mt-6 flex flex-col gap-2">{children}</div>}
+      </div>
+    </div>
+  );
+}
 
 export default function StudioPage() {
   const params = useParams();
+  const router = useRouter();
   const studioCode = params.studioCode as string;
-  const [token, setToken] = useState<string | null>(null);
-  const [role, setRole] = useState<'host' | 'guest'>('guest');
-  const [showGuestJoin, setShowGuestJoin] = useState(false);
-  const [guestName, setGuestName] = useState('');
+  const serverUrl = process.env.NEXT_PUBLIC_LIVEKIT_WS_URL;
 
-  const livekitServerUrl = process.env.NEXT_PUBLIC_LIVEKIT_WS_URL;
+  const [phase, setPhase] = useState<Phase>('loading');
+  const [info, setInfo] = useState<StudioInfo | null>(null);
+  const [role, setRole] = useState<'host' | 'guest'>('guest');
+  const [broadcast, setBroadcast] = useState<Broadcast | null>(null);
+  const [defaultName, setDefaultName] = useState('');
+  const [token, setToken] = useState('');
+  const [choices, setChoices] = useState<JoinChoices | null>(null);
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState('');
+  const [leaveReason, setLeaveReason] = useState<LeaveReason>('left');
 
   useEffect(() => {
     if (!studioCode) return;
+    let cancelled = false;
 
-    const fetchToken = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const headers: HeadersInit = { 'Content-Type': 'application/json' };
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-
-        const response = await fetch('/api/livekit/token', {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify({ room: studioCode }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setToken(data.token);
-          setRole('host');
-        } else if (response.status === 401) {
-          // Unauthorized, treat as guest
-          setToken(null);
-          setRole('guest');
-          setShowGuestJoin(true);
-        } else {
-          alert('LiveKit token alınamadı.');
-        }
-      } catch (error: any) {
-        console.error('Failed to fetch LiveKit token:', error);
-        setToken(null);
-        setRole('guest');
-        setShowGuestJoin(true);
+    (async () => {
+      const infoRes = await fetch(`/api/public/studio/${studioCode}`).catch(() => null);
+      if (!infoRes || !infoRes.ok) {
+        if (!cancelled) setPhase('notfound');
+        return;
       }
-    };
+      const studio: StudioInfo = await infoRes.json();
 
-    fetchToken();
+      // Giriş yapmış ve stüdyonun sahibi ise yapımcı olarak katılır
+      const authToken = localStorage.getItem('token');
+      let asHost = false;
+      let hostName = '';
+      if (authToken) {
+        const headers = { Authorization: `Bearer ${authToken}` };
+        const [bRes, meRes] = await Promise.all([
+          fetch(`/api/broadcasts/studio/${studioCode}`, { headers }).catch(() => null),
+          fetch('/api/me', { headers }).catch(() => null),
+        ]);
+        if (bRes?.ok) {
+          asHost = true;
+          if (!cancelled) setBroadcast(await bRes.json());
+        } else if (bRes?.status === 401) {
+          // Oturum süresi dolmuş: misafir olarak devam edilir, lobide giriş linki gösterilir
+          localStorage.removeItem('token');
+        }
+        if (meRes?.ok) {
+          const me = await meRes.json();
+          hostName = me.name || me.email?.split('@')[0] || '';
+        }
+      }
+
+      if (cancelled) return;
+      setInfo(studio);
+      setRole(asHost ? 'host' : 'guest');
+      setDefaultName(asHost ? hostName : localStorage.getItem(GUEST_NAME_KEY) || hostName);
+      setPhase('lobby');
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [studioCode]);
 
-  const handleGuestJoin = async () => {
-    if (!guestName.trim()) return;
-
+  const join = async (c: JoinChoices) => {
+    setJoining(true);
+    setJoinError('');
     try {
-      const response = await fetch('/api/public/join-studio', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studioCode, name: guestName }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setToken(data.token);
-        setRole('guest');
-        setShowGuestJoin(false);
+      let res: Response;
+      if (role === 'host') {
+        res = await fetch('/api/livekit/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token') || ''}` },
+          body: JSON.stringify({ room: studioCode, name: c.name }),
+        });
       } else {
-        alert('Misafir girişi başarısız.');
+        localStorage.setItem(GUEST_NAME_KEY, c.name);
+        res = await fetch('/api/public/join-studio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studioCode, name: c.name }),
+        });
       }
-    } catch (error) {
-      console.error('Guest join failed:', error);
-      alert('Misafir girişi sırasında hata oluştu.');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Stüdyoya katılınamadı');
+      setToken(data.token);
+      setChoices(c);
+      setPhase('studio');
+    } catch (err: any) {
+      setJoinError(err.message);
+    } finally {
+      setJoining(false);
     }
   };
 
-  if (!token && role === 'host') {
-    // Loading state for host
+  const onLeft = (reason: LeaveReason) => {
+    if (role === 'host' && reason === 'left') {
+      router.push('/dashboard');
+      return;
+    }
+    setLeaveReason(reason);
+    setToken('');
+    setPhase('left');
+  };
+
+  if (!serverUrl) {
+    return <FullScreenMessage icon={<VideoOff className="h-6 w-6" />} title="Yapılandırma eksik" text="NEXT_PUBLIC_LIVEKIT_WS_URL tanımlı değil." />;
+  }
+
+  if (phase === 'loading') {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
-        <p>Stüdyoya bağlanılıyor...</p>
+      <div className="flex min-h-screen items-center justify-center bg-muted/60 text-muted-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin text-primary" /> Stüdyo yükleniyor…
       </div>
     );
   }
 
-  if (showGuestJoin) {
+  if (phase === 'notfound') {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
-        <div className="bg-gray-800 p-8 rounded-lg shadow-lg w-96">
-          <h2 className="text-2xl font-bold mb-4 text-center">Stüdyoya Katıl</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Adınız</label>
-              <input
-                type="text"
-                value={guestName}
-                onChange={(e) => setGuestName(e.target.value)}
-                className="w-full p-2 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:border-blue-500"
-                placeholder="Adınızı girin"
-              />
-            </div>
-            <button
-              onClick={handleGuestJoin}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition"
-            >
-              Katıl
-            </button>
-          </div>
-        </div>
-      </div>
+      <FullScreenMessage icon={<VideoOff className="h-6 w-6" />} title="Stüdyo bulunamadı" text="Bu davet linki geçersiz ya da yayın silinmiş olabilir.">
+        <Button asChild>
+          <Link href="/">Ana sayfaya dön</Link>
+        </Button>
+      </FullScreenMessage>
     );
   }
 
-  // If token is null but role is guest, StudioSession handles the join flow
-  if (!livekitServerUrl) return null;
+  if (phase === 'left') {
+    const removed = leaveReason === 'removed';
+    return (
+      <FullScreenMessage
+        icon={removed ? <UserX className="h-6 w-6" /> : <LogOut className="h-6 w-6" />}
+        title={removed ? 'Stüdyodan çıkarıldınız' : 'Stüdyodan ayrıldınız'}
+        text={removed ? 'Yapımcı sizi stüdyodan çıkardı.' : 'Katıldığınız için teşekkürler!'}
+      >
+        <Button onClick={() => setPhase('lobby')}>Tekrar katıl</Button>
+      </FullScreenMessage>
+    );
+  }
 
-  return <StudioSession token={token || ''} serverUrl={livekitServerUrl} studioCode={studioCode} initialRole={role} />;
+  if (phase === 'studio' && token && choices) {
+    return (
+      <StudioSession
+        token={token}
+        serverUrl={serverUrl}
+        studioCode={studioCode}
+        role={role}
+        title={info?.title || ''}
+        broadcast={broadcast}
+        choices={choices}
+        onLeft={onLeft}
+      />
+    );
+  }
+
+  return (
+    <Lobby
+      title={info?.title || ''}
+      hostName={info?.host_name}
+      role={role}
+      defaultName={defaultName}
+      joining={joining}
+      error={joinError}
+      onJoin={join}
+    />
+  );
 }

@@ -6,10 +6,11 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/livekit/protocol/auth"
 	lk_protocol "github.com/livekit/protocol/livekit"
 	lksdk "github.com/livekit/server-sdk-go/v2"
@@ -107,45 +108,96 @@ func StartEgress(c *fiber.Ctx) error {
 	log.Printf("Egress başlatılıyor: Quality=%s, FPS=%d, VideoBitrate=%d kbps, AudioBitrate=%d kbps",
 		input.Quality, fps, videoBitrate, audioBitrate)
 
+	type targetResult struct {
+		ID       uint   `json:"id"`
+		Platform string `json:"platform"`
+		Name     string `json:"name"`
+		Error    string `json:"error,omitempty"`
+	}
+	started := []targetResult{}
+	failed := []targetResult{}
+
+	// Hedefler paralel başlatılır; biri yavaş/erişilemez olsa da diğerleri beklemez.
+	var (
+		wg sync.WaitGroup
+		mu sync.Mutex
+	)
 	for _, target := range broadcast.Targets {
-		rtmpUrl := target.RTMPUrl
-
-		req := &lk_protocol.TrackCompositeEgressRequest{
-			RoomName:     broadcast.StudioCode,
-			VideoTrackId: input.TrackID,
-			AudioTrackId: input.AudioTrackID,
-			Options: &lk_protocol.TrackCompositeEgressRequest_Advanced{
-				Advanced: &lk_protocol.EncodingOptions{
-					Width:            width,
-					Height:           height,
-					Framerate:        fps,
-					VideoBitrate:     videoBitrate,
-					VideoCodec:       lk_protocol.VideoCodec_H264_HIGH,
-					AudioBitrate:     audioBitrate,
-					AudioCodec:       lk_protocol.AudioCodec_AAC,
-					AudioFrequency:   44100,
-					KeyFrameInterval: 2.0,
-				},
-			},
-			Output: &lk_protocol.TrackCompositeEgressRequest_Stream{
-				Stream: &lk_protocol.StreamOutput{
-					Protocol: lk_protocol.StreamProtocol_RTMP,
-					Urls:     []string{fmt.Sprintf("%s/%s", strings.TrimSuffix(rtmpUrl, "/"), target.StreamKey)},
-				},
-			},
-		}
-
-		egress, err := egressClient.StartTrackCompositeEgress(context.Background(), req)
-		if err != nil {
-			log.Printf("Failed to start egress for target %d: %v", target.ID, err)
+		if target.EgressID != "" {
+			// Bu hedef zaten yayında.
+			started = append(started, targetResult{ID: target.ID, Platform: target.Platform, Name: target.Name})
 			continue
 		}
 
-		target.EgressID = egress.EgressId
-		database.DB.Save(&target)
+		wg.Add(1)
+		go func(target models.StreamingTarget) {
+			defer wg.Done()
+
+			req := &lk_protocol.TrackCompositeEgressRequest{
+				RoomName:     broadcast.StudioCode,
+				VideoTrackId: input.TrackID,
+				AudioTrackId: input.AudioTrackID,
+				Options: &lk_protocol.TrackCompositeEgressRequest_Advanced{
+					Advanced: &lk_protocol.EncodingOptions{
+						Width:            width,
+						Height:           height,
+						Framerate:        fps,
+						VideoBitrate:     videoBitrate,
+						VideoCodec:       lk_protocol.VideoCodec_H264_HIGH,
+						AudioBitrate:     audioBitrate,
+						AudioCodec:       lk_protocol.AudioCodec_AAC,
+						AudioFrequency:   44100,
+						KeyFrameInterval: 2.0,
+					},
+				},
+				Output: &lk_protocol.TrackCompositeEgressRequest_Stream{
+					Stream: &lk_protocol.StreamOutput{
+						Protocol: lk_protocol.StreamProtocol_RTMP,
+						Urls:     []string{fmt.Sprintf("%s/%s", strings.TrimSuffix(target.RTMPUrl, "/"), target.StreamKey)},
+					},
+				},
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+			defer cancel()
+			egress, err := egressClient.StartTrackCompositeEgress(ctx, req)
+
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				log.Printf("Failed to start egress for target %d: %v", target.ID, err)
+				failed = append(failed, targetResult{ID: target.ID, Platform: target.Platform, Name: target.Name, Error: err.Error()})
+				return
+			}
+			target.EgressID = egress.EgressId
+			database.DB.Model(&target).Update("egress_id", egress.EgressId)
+			started = append(started, targetResult{ID: target.ID, Platform: target.Platform, Name: target.Name})
+		}(target)
+	}
+	wg.Wait()
+
+	if len(started) == 0 {
+		errMsg := "Failed to start egress for all targets"
+		if len(failed) > 0 {
+			errMsg = failed[0].Error
+		}
+		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": errMsg, "failed": failed})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Egress processes started"})
+	if broadcast.Status != models.BroadcastStatusLive {
+		now := time.Now()
+		broadcast.Status = models.BroadcastStatusLive
+		broadcast.StartedAt = &now
+		broadcast.EndedAt = nil
+		database.DB.Model(&broadcast).Select("status", "started_at", "ended_at").Updates(&broadcast)
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message":    "Egress processes started",
+		"started":    started,
+		"failed":     failed,
+		"started_at": broadcast.StartedAt,
+	})
 }
 
 func StopEgress(c *fiber.Ctx) error {
@@ -169,49 +221,88 @@ func StopEgress(c *fiber.Ctx) error {
 				EgressId: target.EgressID,
 			})
 			if err != nil {
+				// Egress zaten sonlanmış olabilir; kaydı yine de temizle.
 				log.Printf("Failed to stop egress %s for target %d: %v", target.EgressID, target.ID, err)
-				continue
 			}
 			target.EgressID = ""
 			database.DB.Save(&target)
 		}
 	}
 
+	now := time.Now()
+	broadcast.Status = models.BroadcastStatusEnded
+	broadcast.EndedAt = &now
+	database.DB.Model(&broadcast).Select("status", "ended_at").Updates(&broadcast)
+
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Egress processes stopped"})
 }
 
+func createStudioToken(room, identity, name, role string) (string, error) {
+	at := auth.NewAccessToken(os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET"))
+	canPub := true
+	canSub := true
+	canPubData := true
+	grant := &auth.VideoGrant{
+		RoomJoin:       true,
+		Room:           room,
+		CanPublish:     &canPub,
+		CanSubscribe:   &canSub,
+		CanPublishData: &canPubData,
+	}
+	metadata := fmt.Sprintf(`{"role":%q}`, role)
+
+	at.AddGrant(grant).
+		SetIdentity(identity).
+		SetName(name).
+		SetMetadata(metadata).
+		SetValidFor(time.Hour * 12) // Extended for long streams
+
+	return at.ToJWT()
+}
+
+func cleanDisplayName(name string) string {
+	name = strings.TrimSpace(name)
+	if len([]rune(name)) > 40 {
+		name = string([]rune(name)[:40])
+	}
+	return name
+}
+
+// CreateLiveKitToken yalnızca yayının sahibine "host" rolüyle token verir.
+// Sahibi olmayan giriş yapmış kullanıcılar 403 alır ve misafir akışına yönlendirilir.
 func CreateLiveKitToken(c *fiber.Ctx) error {
 	input := new(models.LiveKitTokenInput)
 	if err := c.BodyParser(input); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 	}
 
-	user := c.Locals("user").(*jwt.Token)
-	claims := user.Claims.(jwt.MapClaims)
-	participantIdentity := claims["email"].(string)
+	userId := getUserIdFromToken(c)
 
-	at := auth.NewAccessToken(os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET"))
-	canPub := true
-	canSub := true
-	grant := &auth.VideoGrant{
-		RoomJoin:     true,
-		Room:         input.Room,
-		CanPublish:   &canPub,
-		CanSubscribe: &canSub,
+	var broadcast models.Broadcast
+	if err := database.DB.First(&broadcast, "studio_code = ?", input.Room).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Studio not found"})
 	}
-	metadata := `{"role":"host"}`
+	if broadcast.UserID != userId {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only the studio owner can join as host"})
+	}
 
-	at.AddGrant(grant).
-		SetIdentity(participantIdentity).
-		SetMetadata(metadata).
-		SetValidFor(time.Hour * 12) // Extended for long streams
+	var user models.User
+	database.DB.First(&user, userId)
 
-	token, err := at.ToJWT()
+	name := cleanDisplayName(input.Name)
+	if name == "" {
+		name = user.Name
+	}
+	if name == "" {
+		name = strings.Split(user.Email, "@")[0]
+	}
+
+	token, err := createStudioToken(input.Room, fmt.Sprintf("host-%d", userId), name, "host")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create LiveKit token"})
 	}
 
-	return c.JSON(fiber.Map{"token": token})
+	return c.JSON(fiber.Map{"token": token, "role": "host"})
 }
 
 func JoinStudioPublic(c *fiber.Ctx) error {
@@ -220,27 +311,78 @@ func JoinStudioPublic(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 	}
 
-	at := auth.NewAccessToken(os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET"))
-	canPub := true
-	canSub := true
-	grant := &auth.VideoGrant{
-		RoomJoin:     true,
-		Room:         input.StudioCode,
-		CanPublish:   &canPub,
-		CanSubscribe: &canSub,
+	name := cleanDisplayName(input.Name)
+	if name == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Name is required"})
 	}
-	metadata := `{"role":"guest"}`
 
-	at.AddGrant(grant).
-		SetIdentity(input.Name).
-		SetName(input.Name).
-		SetMetadata(metadata).
-		SetValidFor(time.Hour * 12) // Extended for long streams
+	var broadcast models.Broadcast
+	if err := database.DB.First(&broadcast, "studio_code = ?", input.StudioCode).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Studio not found"})
+	}
 
-	token, err := at.ToJWT()
+	identity := "guest-" + strings.ReplaceAll(uuid.New().String(), "-", "")[:12]
+	token, err := createStudioToken(input.StudioCode, identity, name, "guest")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create LiveKit token"})
 	}
 
-	return c.JSON(fiber.Map{"token": token})
+	return c.JSON(fiber.Map{"token": token, "role": "guest"})
+}
+
+func getOwnedBroadcastByStudioCode(c *fiber.Ctx) (*models.Broadcast, error) {
+	userId := getUserIdFromToken(c)
+	var broadcast models.Broadcast
+	if err := database.DB.First(&broadcast, "studio_code = ? AND user_id = ?", c.Params("studioCode"), userId).Error; err != nil {
+		return nil, err
+	}
+	return &broadcast, nil
+}
+
+func newRoomClient() *lksdk.RoomServiceClient {
+	return lksdk.NewRoomServiceClient(os.Getenv("LIVEKIT_HOST"), os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET"))
+}
+
+// RemoveParticipant, yapımcının bir misafiri stüdyodan çıkarmasını sağlar.
+func RemoveParticipant(c *fiber.Ctx) error {
+	broadcast, err := getOwnedBroadcastByStudioCode(c)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Broadcast not found"})
+	}
+	input := new(models.ParticipantActionInput)
+	if err := c.BodyParser(input); err != nil || input.Identity == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "identity is required"})
+	}
+
+	_, err = newRoomClient().RemoveParticipant(context.Background(), &lk_protocol.RoomParticipantIdentity{
+		Room:     broadcast.StudioCode,
+		Identity: input.Identity,
+	})
+	if err != nil {
+		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// MuteParticipant, yapımcının bir misafirin mikrofonunu kapatmasını sağlar.
+func MuteParticipant(c *fiber.Ctx) error {
+	broadcast, err := getOwnedBroadcastByStudioCode(c)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Broadcast not found"})
+	}
+	input := new(models.ParticipantActionInput)
+	if err := c.BodyParser(input); err != nil || input.Identity == "" || input.TrackSid == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "identity and trackSid are required"})
+	}
+
+	_, err = newRoomClient().MutePublishedTrack(context.Background(), &lk_protocol.MuteRoomTrackRequest{
+		Room:     broadcast.StudioCode,
+		Identity: input.Identity,
+		TrackSid: input.TrackSid,
+		Muted:    true,
+	})
+	if err != nil {
+		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }

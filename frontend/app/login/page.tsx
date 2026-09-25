@@ -1,50 +1,40 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import Link from "next/link";
+import Link from 'next/link';
+import { Loader2 } from 'lucide-react';
+import { AuthCard } from '@/components/app/AuthCard';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export default function LoginPage() {
-
   const router = useRouter();
-  const [email, setEmail] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
-  const [error, setError] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      router.push('/dashboard');
-    }
+    if (localStorage.getItem('token')) router.push('/dashboard');
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-
     try {
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Invalid credentials');
-      }
-
-      // Store the token and redirect
+      if (!res.ok) throw new Error(res.status === 401 ? 'E-posta veya şifre hatalı' : data.error || 'Giriş yapılamadı');
       localStorage.setItem('token', data.token);
-      router.push('/dashboard');
-
+      const next = new URLSearchParams(window.location.search).get('next');
+      router.push(next && next.startsWith('/') ? next : '/dashboard');
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -53,39 +43,33 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen">
-      <Card className="w-full max-w-sm">
-        <form onSubmit={handleSubmit}>
-          <CardHeader>
-            <CardTitle className="text-2xl">Giriş Yap</CardTitle>
-            <CardDescription>
-              Hesabınıza erişmek için e-postanızı ve şifrenizi girin.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="email">E-posta</Label>
-              <Input id="email" type="email" placeholder="ornek@eposta.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="password">Şifre</Label>
-              <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-            </div>
-            {error && <p className="text-xs text-destructive">{error}</p>}
-          </CardContent>
-          <CardFooter className="flex flex-col">
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}
-            </Button>
-            <p className="mt-4 text-xs text-center text-muted-foreground">
-              Hesabınız yok mu?{" "}
-              <Link href="/register" className="underline">
-                Kayıt Olun
-              </Link>
-            </p>
-          </CardFooter>
-        </form>
-      </Card>
-    </div>
+    <AuthCard
+      title="Tekrar hoş geldiniz"
+      subtitle="Stüdyonuza erişmek için giriş yapın."
+      footer={
+        <>
+          Hesabınız yok mu?{' '}
+          <Link href="/register" className="font-medium text-primary hover:underline">
+            Ücretsiz kaydolun
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="email">E-posta</Label>
+          <Input id="email" type="email" placeholder="ornek@eposta.com" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="password">Şifre</Label>
+          <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+        </div>
+        {error && <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+        <Button type="submit" size="lg" className="w-full" disabled={loading}>
+          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Giriş yap
+        </Button>
+      </form>
+    </AuthCard>
   );
 }

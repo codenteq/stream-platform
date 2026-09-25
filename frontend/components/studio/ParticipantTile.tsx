@@ -1,83 +1,117 @@
-import { VideoTrack, useIsSpeaking } from '@livekit/components-react';
-import { Track } from 'livekit-client';
-import type { Participant } from 'livekit-client';
-import { Button } from '@/components/ui/button';
-import { LayoutGrid, User } from 'lucide-react';
+'use client';
 
-export interface StageTrack {
-    participant: Participant;
-    source: Track.Source;
-}
+import { VideoTrack, useIsMuted, useIsSpeaking } from '@livekit/components-react';
+import { Track, type Participant } from 'livekit-client';
+import { MicOff, MonitorUp, MoreVertical, Star, UserX, VolumeX } from 'lucide-react';
+import { UserAvatar } from '@/components/app/UserAvatar';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import type { StageSource } from '@/lib/studio/types';
+import { cn } from '@/lib/utils';
 
 interface ParticipantTileProps {
-    participant: Participant;
-    source: Track.Source;
-    isHost: boolean;
-    variant: 'backstage' | 'stage';
-    onAddToStage?: (track: StageTrack) => void;
-    onRemoveFromStage?: (track: StageTrack) => void;
-    onSetFeatured?: (track: StageTrack) => void;
-    layout?: 'grid' | 'speaker';
-    localParticipant?: Participant;
-    isFeatured?: boolean;
+  participant: Participant;
+  source: StageSource;
+  onStage: boolean;
+  isMain?: boolean;
+  canManage: boolean;
+  onToggleStage?: () => void;
+  onMakeMain?: () => void;
+  onMute?: () => void;
+  onRemove?: () => void;
 }
 
-export function ParticipantTile({
-    participant,
-    source,
-    isHost,
-    variant,
-    onAddToStage,
-    onRemoveFromStage,
-    onSetFeatured,
-    layout,
-    localParticipant,
-    isFeatured
-}: ParticipantTileProps) {
-    const pub = participant.getTrackPublication(source);
-    const isSpeaking = useIsSpeaking(participant);
+/** Kulis şeridindeki katılımcı kutucuğu. Üzerine gelince "Sahneye ekle / Kaldır" gösterir. */
+export function ParticipantTile({ participant, source, onStage, isMain, canManage, onToggleStage, onMakeMain, onMute, onRemove }: ParticipantTileProps) {
+  const lkSource = source === 'screen' ? Track.Source.ScreenShare : Track.Source.Camera;
+  const pub = participant.getTrackPublication(lkSource);
+  const camMuted = useIsMuted({ participant, source: lkSource, publication: pub } as any);
+  const micMuted = useIsMuted({ participant, source: Track.Source.Microphone, publication: participant.getTrackPublication(Track.Source.Microphone) } as any);
+  const speaking = useIsSpeaking(participant);
+  const name = participant.name || participant.identity;
+  const showVideo = !!pub?.track && !camMuted;
+  const hasMic = !!participant.getTrackPublication(Track.Source.Microphone);
 
-    return (
-        <div className={`relative aspect-video bg-gray-800 rounded-lg overflow-hidden ${isSpeaking ? 'border-2 border-green-500' : ''}`}>
-            {pub?.track ? (
-                <VideoTrack trackRef={{ participant: participant, publication: pub, source: pub.source }} />
-            ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                    {source === Track.Source.ScreenShare ? (
-                        <div className="text-gray-400 flex flex-col items-center">
-                            <LayoutGrid className="h-8 w-8 mb-2" />
-                            <span className="text-xs">Ekran Paylaşımı</span>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center">
-                            <User className={`text-gray-400 ${variant === 'stage' ? 'h-12 w-12' : 'h-8 w-8'}`} />
-                            <span className="text-xs text-gray-500 mt-1">Kamera Kapalı</span>
-                        </div>
-                    )}
-                </div>
-            )}
-            <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/50 to-transparent">
-                <p className="text-white text-sm truncate">
-                    {participant.identity} {source === Track.Source.ScreenShare ? '(Ekran)' : ''} {participant.isLocal ? '(Siz)' : ''}
-                </p>
-            </div>
+  return (
+    <div className="group w-[168px] shrink-0">
+      <div
+        className={cn(
+          'relative aspect-video overflow-hidden rounded-lg bg-slate-800 ring-2 transition',
+          onStage ? 'ring-primary' : speaking && source === 'camera' ? 'ring-emerald-400' : 'ring-transparent'
+        )}
+      >
+        {showVideo ? (
+          <VideoTrack
+            trackRef={{ participant, publication: pub!, source: lkSource }}
+            className={cn('h-full w-full', source === 'screen' ? 'object-contain' : 'object-cover', participant.isLocal && source === 'camera' && 'scale-x-[-1]')}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            {source === 'screen' ? <MonitorUp className="h-6 w-6 text-slate-400" /> : <UserAvatar name={name} size={40} />}
+          </div>
+        )}
 
-            {isHost && variant === 'backstage' && onAddToStage && (
-                <Button variant="secondary" size="sm" className="absolute top-2 right-2 z-10" onClick={() => onAddToStage({ participant, source })}>
-                    Sahneye Ekle
-                </Button>
-            )}
+        {onStage && (
+          <span className="absolute left-1.5 top-1.5 rounded bg-primary px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground">
+            {isMain ? 'Ana' : 'Sahnede'}
+          </span>
+        )}
+        {source === 'camera' && hasMic && micMuted && (
+          <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-white">
+            <MicOff className="h-3 w-3" />
+          </span>
+        )}
 
-            {isHost && variant === 'stage' && (
-                <div className="absolute top-2 right-2 z-10 flex gap-1">
-                    {onRemoveFromStage && (
-                        <Button variant="destructive" size="sm" className="p-1 h-auto" onClick={() => onRemoveFromStage({ participant, source })}>Çıkar</Button>
-                    )}
-                    {layout === 'speaker' && !isFeatured && onSetFeatured && (
-                        <Button variant="secondary" size="sm" className="p-1 h-auto" onClick={() => onSetFeatured({ participant, source })}>Öne Çıkar</Button>
-                    )}
-                </div>
-            )}
-        </div>
-    );
+        {canManage && onToggleStage && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+            <Button size="sm" variant={onStage ? 'secondary' : 'default'} className="h-8 shadow" onClick={onToggleStage}>
+              {onStage ? 'Kaldır' : 'Sahneye ekle'}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-1.5 flex items-center gap-1">
+        <p className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+          {source === 'screen' ? `${name} · Ekran` : name}
+          {participant.isLocal && <span className="text-muted-foreground"> (Siz)</span>}
+        </p>
+        {canManage && (onMakeMain || onMute || onRemove) && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label="Seçenekler">
+                <MoreVertical className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {onMakeMain && (
+                <DropdownMenuItem onSelect={onMakeMain} disabled={!onStage || isMain}>
+                  <Star /> Ana görüntü yap
+                </DropdownMenuItem>
+              )}
+              {onMute && (
+                <DropdownMenuItem onSelect={onMute} disabled={!hasMic || micMuted}>
+                  <VolumeX /> Sessize al
+                </DropdownMenuItem>
+              )}
+              {onRemove && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem destructive onSelect={onRemove}>
+                    <UserX /> Stüdyodan çıkar
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+    </div>
+  );
 }

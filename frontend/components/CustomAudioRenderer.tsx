@@ -1,43 +1,40 @@
-import { useTracks } from '@livekit/components-react';
-import { Track, RoomEvent } from 'livekit-client';
+import { useTracks, type TrackReference } from '@livekit/components-react';
+import { Track } from 'livekit-client';
 import { useEffect, useRef } from 'react';
 
+/**
+ * Uzak katılımcıların sesini çalar. Yerel izler ve yayın miksi ("broadcast-mix")
+ * çalınmaz; aksi halde kişi kendi sesini yankı olarak duyardı.
+ */
 export function CustomAudioRenderer() {
-    // Select all audio tracks
-    const tracks = useTracks([Track.Source.Microphone, Track.Source.Unknown, Track.Source.ScreenShare]);
+  const tracks = useTracks([Track.Source.Microphone, Track.Source.ScreenShareAudio, Track.Source.Unknown], {
+    onlySubscribed: true,
+  });
 
-    return (
-        <div style={{ display: 'none' }}>
-            {tracks.map((ref) => {
-                // FILTER 1: Do not play local tracks (prevents hearing self)
-                if (ref.participant.isLocal) {
-                    return null;
-                }
-
-                // FILTER 2: Do not play the broadcast mix track (prevents feedback loop "gunshots")
-                if (ref.publication.trackName === 'broadcast-mix') {
-                    return null;
-                }
-
-                return <AudioTrack key={ref.publication.trackSid} trackRef={ref} />;
-            })}
-        </div>
-    );
+  return (
+    <div style={{ display: 'none' }}>
+      {tracks.map((ref) => {
+        if (ref.participant.isLocal) return null;
+        if (ref.publication.kind !== Track.Kind.Audio) return null;
+        if (ref.publication.trackName === 'broadcast-mix') return null;
+        return <AudioTrack key={ref.publication.trackSid} trackRef={ref as TrackReference} />;
+      })}
+    </div>
+  );
 }
 
-function AudioTrack({ trackRef }: { trackRef: any }) {
-    const audioEl = useRef<HTMLAudioElement>(null);
+function AudioTrack({ trackRef }: { trackRef: TrackReference }) {
+  const audioEl = useRef<HTMLAudioElement>(null);
 
-    useEffect(() => {
-        const el = audioEl.current;
-        const track = trackRef.publication.track;
-        if (!el || !track) return;
+  useEffect(() => {
+    const el = audioEl.current;
+    const track = trackRef.publication.track;
+    if (!el || !track) return;
+    track.attach(el);
+    return () => {
+      track.detach(el);
+    };
+  }, [trackRef.publication.track]);
 
-        track.attach(el);
-        return () => {
-            track.detach(el);
-        };
-    }, [trackRef]);
-
-    return <audio ref={audioEl} />;
+  return <audio ref={audioEl} />;
 }
